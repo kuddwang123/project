@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<package>
+  <name>hjlog</name>
+  <version>0.1.0</version>
+  <description>
+    HJ customer log interface.
+  </description>
+  <maintainer email="yzupl1995@163.com">panlou</maintainer>
+  <license>BSD</license>
+
+  <author>panlou</author>
+  <author email="yzupl1995@163.com">panlou</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+</package>

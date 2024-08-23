@@ -1,0 +1,23 @@
+{
+  "so_dir":"./",
+  "functions": [
+      {
+        "ID": "core_dump",
+        "name": "core_dump",
+        "dump_path": "/tmp/dump_planning_node"
+      },
+      {
+        "ID": "log_redirect",
+        "name": "log_redirect",
+        "err_log_file_path": "",
+        "cout_log_file_path": ""
+      },
+      {
+          "ID": "hj_navi",
+          "name": "hj_navi",
+          "test_transmit": "well come hj_navi",
+          "navi_work_model": 0,
+          "navi_config_path":"/data/hj/config/planning_node/config/navi.json"
+      }
+  ]
+}

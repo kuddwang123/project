@@ -1,0 +1,27 @@
+cmake_minimum_required(VERSION 3.0.2)
+project(core_dump)
+set (CMAKE_CXX_STANDARD 14)
+set( HJ_WORKSPACE_PATH "..")
+set(PLATFORM "amd64" CACHE STRING "amd64, i386, arm64_rk, etc.")
+#SET( CMAKE_CXX_FLAGS "-g")
+find_package(catkin REQUIRED COMPONENTS rostime roscpp)
+
+include_directories(include ${catkin_INCLUDE_DIRS})
+include_directories("${HJ_WORKSPACE_PATH}/thirdparty/include")
+include_directories("${HJ_WORKSPACE_PATH}/hj_interface/include")
+include_directories("${HJ_WORKSPACE_PATH}/thirdparty/include/breakpad")
+link_directories(${catkin_LIBRARY_DIRS})
+link_directories("${HJ_WORKSPACE_PATH}/hj_interface/platforms/${PLATFORM}")
+link_directories("${HJ_WORKSPACE_PATH}/thirdparty/platforms/${PLATFORM}")
+add_definitions(-DFUNCTION_NAME="core_dump")
+catkin_package(CATKIN_DEPENDS message_runtime std_msgs)
+add_library(core_dump src/core_dump.cpp)
+target_link_libraries(core_dump ${catkin_LIBRARIES} dl pthread)
+target_link_libraries(core_dump base_framework)
+target_link_libraries(core_dump breakpad_client)
+set_target_properties(core_dump PROPERTIES
+  LIBRARY_OUTPUT_DIRECTORY ${CATKIN_DEVEL_PREFIX}/lib/core_dump)
+
+install(TARGETS core_dump
+  LIBRARY DESTINATION ${HJ_WORKSPACE_PATH}/src/hj_interface/platforms/${PLATFORM}/
+)

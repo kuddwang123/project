@@ -1,0 +1,128 @@
+@startuml mcuOtaSeq
+skin rose
+participant soc
+participant mcu
+
+soc -> mcu: ota start request
+mcu --> soc: ota ack
+
+mcu -> soc: firmware info req
+soc --> mcu: firmware info send
+note right
+    binary file size 
+    and version
+end note
+
+group loop
+mcu -> soc: bin data req
+note left
+    the offset of binary 
+    data to be sent
+end note
+soc --> mcu: data res
+end group
+
+
+mcu -> soc: ota result
+note right
+0:success, 1:fail
+end note
+soc --> mcu: quit ota
+@enduml
+
+@startuml dataflow
+skin rose
+actor ota
+participant mcuota
+participant mcu
+boundary stateMachine
+boundary uartHandler
+entity uart
+
+== Initialize ==
+ota ->  mcuota:start
+mcuota -> mcuota :load bin
+mcuota -> stateMachine :init
+mcuota -> mcu:notify
+mcu -> mcu : stop uart read
+mcu -> mcuota : stop done
+
+== EnterOta ==
+mcuota -> stateMachine :run
+group  loop thread
+stateMachine -> stateMachine : handle
+end group
+
+mcuota -> uartHandler: run
+group loop thread
+uart -> uartHandler : select
+end group
+
+group  loop
+stateMachine -> uartHandler : write data
+uartHandler -> uart : write
+uart --> uartHandler : read
+uartHandler --> stateMachine : read data
+end group
+
+== QuitOta ==
+stateMachine -> stateMachine: thread end
+uartHandler -> uartHandler : thread end
+stateMachine -> mcuota : join
+uartHandler -> mcuota : join
+mcuota -> mcu : uart read continue
+
+@enduml
+
+@startuml stateMachine
+skin rose
+state ota {
+    state "ota start" as s1
+    s1 : soc->mcu
+    state "wait ota ack" as s2
+    s2 : mcu->soc
+    [*] --> s1
+    s1 --> s2
+    s2 --> [*]
+}
+
+state firmInfo {
+    state "wait info query" as s3
+    s3 : mcu->soc
+    state "write firm info" as s4
+    s4 : soc->mcu
+    [*] --> s3
+    s3 --> s4
+    s4 --> [*]
+}
+
+state data {
+    state "wait data query" as s5
+    s5 : mcu->soc
+    state "write binary data" as s6
+    s6 : soc->mcu
+    [*] --> s5
+    s5 --> s6
+    s6 --> s5
+    s6 --> [*]
+}
+
+state resultCheck {
+    state "result" as s7
+    s7 : mcu->soc
+    state "ota quit" as s8
+    s8 : soc->mcu
+    [*] --> s7
+    s7 --> s8
+    s8 --> [*]
+}
+
+[*] -> ota
+ota --> [*]: fail
+ota -> firmInfo : success
+firmInfo -> data : success
+firmInfo --> [*] : fail
+data -> resultCheck : success
+data  --> [*] : fail
+resultCheck --> [*] :success/fail
+@enduml

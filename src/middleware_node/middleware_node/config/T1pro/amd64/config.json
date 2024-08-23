@@ -1,0 +1,41 @@
+{
+  "so_dir":"./",
+  "functions": [
+      {
+        "ID": "core_dump",
+        "name": "core_dump",
+        "dump_path": "/tmp/dump_middleware_node"
+      },
+      {
+        "ID": "log_redirect",
+        "name": "log_redirect",
+        "err_log_file_path": "/tmp/logging",
+        "cout_log_file_path": ""
+      },
+      {
+        "ID": "ota_schedule",
+        "name": "ota_schedule",
+        "test_transmit": "well come ota_schedule"
+      },
+      {
+        "ID": "parse_sys_com",
+        "name": "parse_sys_com",
+        "test_transmit": "well come parse_sys_com"
+      },
+      {
+        "ID": "charge",
+        "name": "charge",
+        "test_transmit": "well come charge"
+      },
+      {
+        "ID": "task_manage",
+        "name": "task_manage",
+        "test_transmit": "well come task_manage"
+      },
+      {
+        "ID": "state_machine",
+        "name": "state_machine",
+        "test_transmit": "well come state_machine"
+      }
+  ]
+}

@@ -1,0 +1,7 @@
+geometry_msgs/Pose pose   # relocalization result
+geometry_msgs/Pose entry_position_pose
+bool relocalization_success  # true. relocalization success; false. relocalization failed.
+bool building_frames_success  # true. building frames success; false. building frames failed.
+
+---
+uint8 result # 0. receive success;

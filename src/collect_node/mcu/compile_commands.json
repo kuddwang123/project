@@ -1,0 +1,52 @@
+[
+{
+  "directory": "/home/wangqing/work_space/hj_workspace/build/base_framework",
+  "command": "/usr/bin/c++  -DPLATFORM=amd64 -DROSCONSOLE_BACKEND_LOG4CXX -DROS_BUILD_SHARED_LIBS=1 -DROS_PACKAGE_NAME=\\\"base_framework\\\" -Dbase_framework_EXPORTS -I/home/wangqing/work_space/hj_workspace/src/base_framework/include -I/opt/ros/noetic/include -I/opt/ros/noetic/share/xmlrpcpp/cmake/../../../include/xmlrpcpp -I/home/wangqing/work_space/hj_workspace/src/base_framework/../thirdparty/include -I/home/wangqing/work_space/hj_workspace/src/base_framework/../hj_interface/include  -g -fPIC   -std=gnu++14 -o CMakeFiles/base_framework.dir/src/node_factory.cpp.o -c /home/wangqing/work_space/hj_workspace/src/base_framework/src/node_factory.cpp",
+  "file": "/home/wangqing/work_space/hj_workspace/src/base_framework/src/node_factory.cpp"
+},
+{
+  "directory": "/home/wangqing/work_space/hj_workspace/build/base_framework",
+  "command": "/usr/bin/c++  -DPLATFORM=amd64 -DROSCONSOLE_BACKEND_LOG4CXX -DROS_BUILD_SHARED_LIBS=1 -DROS_PACKAGE_NAME=\\\"base_framework\\\" -Dbase_framework_EXPORTS -I/home/wangqing/work_space/hj_workspace/src/base_framework/include -I/opt/ros/noetic/include -I/opt/ros/noetic/share/xmlrpcpp/cmake/../../../include/xmlrpcpp -I/home/wangqing/work_space/hj_workspace/src/base_framework/../thirdparty/include -I/home/wangqing/work_space/hj_workspace/src/base_framework/../hj_interface/include  -g -fPIC   -std=gnu++14 -o CMakeFiles/base_framework.dir/src/function_factory.cpp.o -c /home/wangqing/work_space/hj_workspace/src/base_framework/src/function_factory.cpp",
+  "file": "/home/wangqing/work_space/hj_workspace/src/base_framework/src/function_factory.cpp"
+},
+{
+  "directory": "/home/wangqing/work_space/hj_workspace/build/base_framework",
+  "command": "/usr/bin/c++  -DPLATFORM=amd64 -DROSCONSOLE_BACKEND_LOG4CXX -DROS_BUILD_SHARED_LIBS=1 -DROS_PACKAGE_NAME=\\\"base_framework\\\" -Dbase_framework_EXPORTS -I/home/wangqing/work_space/hj_workspace/src/base_framework/include -I/opt/ros/noetic/include -I/opt/ros/noetic/share/xmlrpcpp/cmake/../../../include/xmlrpcpp -I/home/wangqing/work_space/hj_workspace/src/base_framework/../thirdparty/include -I/home/wangqing/work_space/hj_workspace/src/base_framework/../hj_interface/include  -g -fPIC   -std=gnu++14 -o CMakeFiles/base_framework.dir/src/log_factory.cpp.o -c /home/wangqing/work_space/hj_workspace/src/base_framework/src/log_factory.cpp",
+  "file": "/home/wangqing/work_space/hj_workspace/src/base_framework/src/log_factory.cpp"
+},
+{
+  "directory": "/home/wangqing/work_space/hj_workspace/build/base_framework",
+  "command": "/usr/bin/c++  -DPLATFORM=amd64 -DROSCONSOLE_BACKEND_LOG4CXX -DROS_BUILD_SHARED_LIBS=1 -DROS_PACKAGE_NAME=\\\"base_framework\\\" -Dbase_framework_EXPORTS -I/home/wangqing/work_space/hj_workspace/src/base_framework/include -I/opt/ros/noetic/include -I/opt/ros/noetic/share/xmlrpcpp/cmake/../../../include/xmlrpcpp -I/home/wangqing/work_space/hj_workspace/src/base_framework/../thirdparty/include -I/home/wangqing/work_space/hj_workspace/src/base_framework/../hj_interface/include  -g -fPIC   -std=gnu++14 -o CMakeFiles/base_framework.dir/src/node_cache.cpp.o -c /home/wangqing/work_space/hj_workspace/src/base_framework/src/node_cache.cpp",
+  "file": "/home/wangqing/work_space/hj_workspace/src/base_framework/src/node_cache.cpp"
+},
+{
+  "directory": "/home/wangqing/work_space/hj_workspace/build/base_framework",
+  "command": "/usr/bin/c++  -DPLATFORM=amd64 -DROSCONSOLE_BACKEND_LOG4CXX -DROS_BUILD_SHARED_LIBS=1 -DROS_PACKAGE_NAME=\\\"base_framework\\\" -Dbase_framework_EXPORTS -I/home/wangqing/work_space/hj_workspace/src/base_framework/include -I/opt/ros/noetic/include -I/opt/ros/noetic/share/xmlrpcpp/cmake/../../../include/xmlrpcpp -I/home/wangqing/work_space/hj_workspace/src/base_framework/../thirdparty/include -I/home/wangqing/work_space/hj_workspace/src/base_framework/../hj_interface/include  -g -fPIC   -std=gnu++14 -o CMakeFiles/base_framework.dir/src/shm.cpp.o -c /home/wangqing/work_space/hj_workspace/src/base_framework/src/shm.cpp",
+  "file": "/home/wangqing/work_space/hj_workspace/src/base_framework/src/shm.cpp"
+},
+{
+  "directory": "/home/wangqing/work_space/hj_workspace/build/collect_node/mcu",
+  "command": "/usr/bin/c++  -DDEBUG -DFUNCTION_NAME=\\\"mcu\\\" -DROSCONSOLE_BACKEND_LOG4CXX -DROS_BUILD_SHARED_LIBS=1 -DROS_PACKAGE_NAME=\\\"mcu\\\" -DX6 -Dmcu_EXPORTS -I/home/wangqing/work_space/hj_workspace/src/collect_node/mcu/include -I/opt/ros/noetic/include -I/opt/ros/noetic/share/xmlrpcpp/cmake/../../../include/xmlrpcpp -I/home/wangqing/work_space/hj_workspace/src/collect_node/mcu/../../thirdparty/include -I/home/wangqing/work_space/hj_workspace/src/collect_node/mcu/../../hj_interface/include  -g -fPIC   -std=gnu++14 -o CMakeFiles/mcu.dir/src/mcu.cpp.o -c /home/wangqing/work_space/hj_workspace/src/collect_node/mcu/src/mcu.cpp",
+  "file": "/home/wangqing/work_space/hj_workspace/src/collect_node/mcu/src/mcu.cpp"
+},
+{
+  "directory": "/home/wangqing/work_space/hj_workspace/build/collect_node/mcu",
+  "command": "/usr/bin/c++  -DDEBUG -DFUNCTION_NAME=\\\"mcu\\\" -DROSCONSOLE_BACKEND_LOG4CXX -DROS_BUILD_SHARED_LIBS=1 -DROS_PACKAGE_NAME=\\\"mcu\\\" -DX6 -Dmcu_EXPORTS -I/home/wangqing/work_space/hj_workspace/src/collect_node/mcu/include -I/opt/ros/noetic/include -I/opt/ros/noetic/share/xmlrpcpp/cmake/../../../include/xmlrpcpp -I/home/wangqing/work_space/hj_workspace/src/collect_node/mcu/../../thirdparty/include -I/home/wangqing/work_space/hj_workspace/src/collect_node/mcu/../../hj_interface/include  -g -fPIC   -std=gnu++14 -o CMakeFiles/mcu.dir/src/mcuMsgRecorder.cpp.o -c /home/wangqing/work_space/hj_workspace/src/collect_node/mcu/src/mcuMsgRecorder.cpp",
+  "file": "/home/wangqing/work_space/hj_workspace/src/collect_node/mcu/src/mcuMsgRecorder.cpp"
+},
+{
+  "directory": "/home/wangqing/work_space/hj_workspace/build/collect_node/mcu",
+  "command": "/usr/bin/c++  -DDEBUG -DFUNCTION_NAME=\\\"mcu\\\" -DROSCONSOLE_BACKEND_LOG4CXX -DROS_BUILD_SHARED_LIBS=1 -DROS_PACKAGE_NAME=\\\"mcu\\\" -DX6 -Dmcu_EXPORTS -I/home/wangqing/work_space/hj_workspace/src/collect_node/mcu/include -I/opt/ros/noetic/include -I/opt/ros/noetic/share/xmlrpcpp/cmake/../../../include/xmlrpcpp -I/home/wangqing/work_space/hj_workspace/src/collect_node/mcu/../../thirdparty/include -I/home/wangqing/work_space/hj_workspace/src/collect_node/mcu/../../hj_interface/include  -g -fPIC   -std=gnu++14 -o CMakeFiles/mcu.dir/src/hjlog.cc.o -c /home/wangqing/work_space/hj_workspace/src/collect_node/mcu/src/hjlog.cc",
+  "file": "/home/wangqing/work_space/hj_workspace/src/collect_node/mcu/src/hjlog.cc"
+},
+{
+  "directory": "/home/wangqing/work_space/hj_workspace/build/collect_node/test_function1",
+  "command": "/usr/bin/c++  -DFUNCTION_NAME=\\\"test_api\\\" -DROSCONSOLE_BACKEND_LOG4CXX -DROS_BUILD_SHARED_LIBS=1 -DROS_PACKAGE_NAME=\\\"test_api\\\" -Dtest_api_EXPORTS -I/home/wangqing/work_space/hj_workspace/src/collect_node/test_function1/include -I/opt/ros/noetic/include -I/opt/ros/noetic/share/xmlrpcpp/cmake/../../../include/xmlrpcpp -I/home/wangqing/work_space/hj_workspace/src/collect_node/test_function1/../../thirdparty/include -I/home/wangqing/work_space/hj_workspace/src/collect_node/test_function1/../../hj_interface/include  -g -g -fPIC   -std=gnu++14 -o CMakeFiles/test_api.dir/src/test_load_so.cpp.o -c /home/wangqing/work_space/hj_workspace/src/collect_node/test_function1/src/test_load_so.cpp",
+  "file": "/home/wangqing/work_space/hj_workspace/src/collect_node/test_function1/src/test_load_so.cpp"
+},
+{
+  "directory": "/home/wangqing/work_space/hj_workspace/build/collect_node/test_function",
+  "command": "/usr/bin/c++  -DFUNCTION_NAME=\\\"test_load_so\\\" -DROSCONSOLE_BACKEND_LOG4CXX -DROS_BUILD_SHARED_LIBS=1 -DROS_PACKAGE_NAME=\\\"test_function\\\" -Dtest_function_EXPORTS -I/home/wangqing/work_space/hj_workspace/src/collect_node/test_function/include -I/opt/ros/noetic/include -I/opt/ros/noetic/share/xmlrpcpp/cmake/../../../include/xmlrpcpp -I/home/wangqing/work_space/hj_workspace/src/collect_node/test_function/../../thirdparty/include -I/home/wangqing/work_space/hj_workspace/src/collect_node/test_function/../../hj_interface/include  -g -fPIC   -std=gnu++14 -o CMakeFiles/test_function.dir/src/test_load_so.cpp.o -c /home/wangqing/work_space/hj_workspace/src/collect_node/test_function/src/test_load_so.cpp",
+  "file": "/home/wangqing/work_space/hj_workspace/src/collect_node/test_function/src/test_load_so.cpp"
+}
+]

@@ -1,0 +1,22 @@
+{
+  "so_dir":"./",
+  "functions": [
+      {
+        "ID": "core_dump",
+        "name": "core_dump",
+        "dump_path": "/tmp/dump_middleware_node"
+      },
+      {
+        "ID": "log_redirect",
+        "name": "log_redirect",
+        "err_log_file_path": "",
+        "cout_log_file_path": ""
+      },
+      {
+          "ID": "demo",
+          "name": "demo",
+          "test_transmit": "well come demo"
+      }
+
+  ]
+}

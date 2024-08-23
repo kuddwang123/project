@@ -1,0 +1,54 @@
+{
+  "so_dir":"./",
+  "functions": [
+      {
+        "ID": "core_dump",
+        "name": "core_dump",
+        "dump_path": "/tmp/dump_collect_node"
+      },
+      {
+        "ID": "log_redirect",
+        "name": "log_redirect",
+        "err_log_file_path": "/tmp/logging",
+        "cout_log_file_path": ""
+      },
+      // {
+      //   "ID": "magnetometers",
+      //   "name": "magnetometers",
+      //   "test_transmit": "well come magnetometers"
+      // },
+      // {
+      //   "ID": "ulsound",
+      //   "name": "ulsound",
+      //   "test_transmit": "well come ulsound"
+      // },
+      // {
+      //   "ID": "mcu",
+      //   "name": "mcu",
+      //   "test_transmit": "well come mcu"
+      // },
+      // {
+      //   "ID": "iot",
+      //   "name": "iot",
+      //   "cert_dir":"./.cert"
+      // },
+      // {
+      //   "ID": "pressure",
+      //   "name": "pressure",
+      //   "pressure": 1000
+      // },
+      // {
+      //   "ID": "imu",
+      //   "name": "imu"
+      // },
+      // {
+      //   "ID": "turbidity",
+      //   "name": "turbidity"
+      // }
+      // ,
+      {
+        "ID": "test_load_so",
+        "name": "test_load_so"
+      }
+  ]
+}

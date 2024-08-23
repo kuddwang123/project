@@ -1,0 +1,5 @@
+./.clang-format
+./.clang-tidy
+./.git_hooks/*
+./compile_commands.json
+

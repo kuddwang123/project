@@ -1,0 +1,335 @@
+// @file ulsound.cpp
+// @brief
+//
+// Copyright 2023 HJ Technology Co.Ltd. All rights reserved.
+// Authors: 609384347@qq.com (wangqing, 2023-12-22)
+#include "ulsound.h"
+
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <termios.h>
+
+#include "hj_interface/Ultra.h"
+#include "hj_interface/Ray.h"
+#include "log.h"
+
+#define SWITCH_TO_J171 "echo 1 > /sys/class/gpio/gpio30/value"
+#define SWITCH_TO_J165 "echo 0 > /sys/class/gpio/gpio30/value"
+#define SWITCH_TO_J172 "echo 1 > /sys/class/gpio/gpio57/value"
+#define SWITCH_TO_J164 "echo 0 > /sys/class/gpio/gpio57/value"
+
+typedef struct termios termios_t;
+
+HJ_REGISTER_FUNCTION(factory) {
+  HJ_INFO("minos register factory,function_name:%s", FUNCTION_NAME);
+  factory.registerCreater<collect_node_ulsound::Ulsound>(FUNCTION_NAME);
+}
+
+namespace collect_node_ulsound {
+u_int32_t front = 0, mid = 0, back = 0;
+int fd_front = -1, fd_side = -1;
+
+ser_Data snd_data;
+ser_Data rec_data;
+hj_interface::Ultra msg;
+hj_interface::Ray ray_msg;
+
+void init_gpio()
+{
+    // gpio30 : 左侧超声波switch
+    // 1:J171, 0:J165
+    system("echo 30 > /sys/class/gpio/export");
+    system("echo out > /sys/class/gpio/gpio30/direction");
+    system("echo 1 > /sys/class/gpio/gpio30/value");
+
+    // gpio57 : 三合一与激光测距switch
+    // 1:j172, 0:j164
+    system("echo 57 > /sys/class/gpio/export");
+    system("echo out > /sys/class/gpio/gpio57/direction");
+    system("echo 1 > /sys/class/gpio/gpio57/value");
+}
+
+unsigned int calccrc(unsigned char crcbuf, unsigned int crc)
+{
+  unsigned char i;
+  crc = crc ^ crcbuf;
+
+  for (i = 0; i < 8; i++) {
+    unsigned char chk;
+    chk = crc & 1;
+    crc = crc >> 1;
+    crc = crc & 0x7fff;
+    if (chk == 1)
+            crc = crc ^ 0xa001;
+    crc = crc & 0xffff;
+  }
+
+  return crc;
+}
+
+unsigned int chkcrc(unsigned char *buf, unsigned char len)
+{
+  unsigned char hi, lo;
+  unsigned int i;
+  unsigned int crc;
+  crc = 0xFFFF;
+
+  for (i = 0; i < len; i++) {
+    crc = calccrc(*buf, crc);
+    buf++;
+  }
+
+  hi = crc % 256;
+  lo = crc / 256;
+  crc = (hi << 8) | lo;
+  return crc;
+}
+
+int uart_init(void) {
+  int serport1fd, val = 0;
+  // uart9 : 左侧超声波switch;   uart3 : 前方三合一与激光测距switch
+  char dev_list[ULS_CNT][32] = {"/dev/ttyS3", "/dev/ttyS9"};
+  /*   进行串口参数设置  */
+  termios_t *ter_s = (termios_t *)malloc(sizeof(*ter_s));
+
+  for (int i = 0; i < ULS_CNT; i++) {
+    HJ_INFO("open device  %s", dev_list[i]);
+    serport1fd = open(dev_list[i], O_RDWR | O_NOCTTY | O_NDELAY);  // 不成为控制终端程序，不受其他程序输出输出影响
+    if (serport1fd < 0) {
+      HJ_ERROR("%s open faild", dev_list[i]);
+      continue;
+    }
+    fcntl(serport1fd, F_SETFL, 0);  // 阻塞读取
+    snd_data.serfd[i] = serport1fd;
+    rec_data.serfd[i] = serport1fd;
+    val++;
+  }
+
+  bzero(ter_s, sizeof(*ter_s));
+
+  ter_s->c_cflag |= CLOCAL | CREAD;  // 激活本地连接与接受使能
+
+  ter_s->c_cflag &= ~CSIZE;  // 失能数据位屏蔽
+  ter_s->c_cflag |= CS8;     // 8位数据位
+
+  ter_s->c_cflag &= ~CSTOPB;  // 1位停止位
+
+  ter_s->c_cflag &= ~PARENB;  // 无校验位
+
+  ter_s->c_cc[VTIME] = 10;  // Time-out value (tenths of a second)
+  ter_s->c_cc[VMIN] = 0;
+
+  /*1 VMIN> 0 && VTIME> 0
+      VMIN为最少读取的字符数，当读取到一个字符后，会启动一个定时器，在定时器超时事前，如果已经读取到了VMIN个字符，则read返回VMIN个字符。如果在接收到VMIN个字符之前，定时器已经超时，则read返回已读取到的字符，注意这个定时器会在每次读取到一个字符后重新启用，即重新开始计时，而且是读取到第一个字节后才启用，也就是说超时的情况下，至少读取到一个字节数据。
+      2 VMIN > 0 && VTIME== 0
+      在只有读取到VMIN个字符时，read才返回，可能造成read被永久阻塞。
+      3 VMIN == 0 && VTIME> 0
+      和第一种情况稍有不同，在接收到一个字节时或者定时器超时时，read返回。如果是超时这种情况，read返回值是0。
+      4 VMIN == 0 && VTIME== 0
+      这种情况下read总是立即就返回，即不会被阻塞。----by 解释粘贴自博客园
+  */
+  cfsetispeed(ter_s, B115200);  // 设置输入波特率
+  cfsetospeed(ter_s, B115200);  // 设置输出波特率
+
+  for (int i = 0; i < ULS_CNT; i++) {
+    if (snd_data.serfd[i] < 0) continue;
+
+    tcflush(snd_data.serfd[i], TCIFLUSH);  // 刷清未处理的输入和/或输出
+    if (tcsetattr(snd_data.serfd[i], TCSANOW, ter_s) != 0) {
+      HJ_ERROR("%d  com set error!", i);
+    }
+  }
+  return val;
+}
+
+void Ulsound::readFront(const hj_bf::HJTimerEvent &)  // 串口发送线程函数
+{
+  // ros::Time start = ros::Time::now();
+  static ser_Data *snd = &snd_data;
+  static int ret;
+
+  snd->databuf[0] = 0x10;
+  static int i = 0;
+
+  unsigned int check_crc, rd_crc;
+  int distance = 0;
+  u_int8_t send_data_tof[8]= {0x01, 0x03, 0x01, 0x01,
+                              0x00, 0x01, 0xD4, 0x36};
+  // read front
+  ret = write(fd_front, snd->databuf, 1);
+  if (ret > 0) {
+    ret = read(fd_front, &(rec_data.databuf[0]), 64);
+    if (ret > 0 && !(ret%8)) {
+      if (rec_data.databuf[7] ==
+          ((rec_data.databuf[0] + rec_data.databuf[1] + rec_data.databuf[2] + rec_data.databuf[3] +
+            rec_data.databuf[4] + rec_data.databuf[5] + rec_data.databuf[6]) &
+           0xff)) {
+        // printf("recv front success,recv size is %d\r\n", ret);
+        msg.front_l = rec_data.databuf[1] * 256 + rec_data.databuf[2];
+        msg.front_m = rec_data.databuf[3] * 256 + rec_data.databuf[4];
+        msg.front_r = rec_data.databuf[5] * 256 + rec_data.databuf[6];
+        msg.id = 0;
+        // HJ_INFO("function:%s,line:%d, frot_l=%d,front_m=%d,front_r=%d",
+        //       __FUNCTION__, __LINE__, msg.front_l, msg.front_m, msg.front_r);
+      } else {
+        HJ_ERROR("front sum error");
+        for (int i = 0; i < ret; ++i) {
+          HJ_ERROR("rec_data.databuf[%d]:%d", i, rec_data.databuf[i]);
+        }
+      }
+    } else {
+      HJ_ERROR("recv triple error: %d", ret);
+    }
+  } else {
+    HJ_ERROR("send front error!");
+  }
+
+  msg.timestamp = hj_bf::HJTime::now();
+  chatter_pub_.publish(msg);
+  // front_timer_.stop();
+  // side_timer_.start();
+
+#if 0  // 读激光测距，由于算法暂未用到，并且影响频率,暂未使用
+  // 拉低,switch切到j164
+  usleep(1*1000);
+  system(SWITCH_TO_J164);
+  usleep(1*1000);
+
+  ret = write(fd_front, send_data_tof, 8);
+  if (ret > 0) {
+      ret = read(fd_front, rec_data.databuf, 64);
+      if (ret > 0 && !(ret%7)) {
+          check_crc = chkcrc(rec_data.databuf, 5);
+          rd_crc = (u_int16_t)rec_data.databuf[5] << 8 | rec_data.databuf[6];
+          if (check_crc != rd_crc) {
+            HJ_INFO("check_crc:%d, rc_crc:%d", check_crc, rd_crc);
+          } else {
+              distance = (u_int16_t)rec_data.databuf[3] << 8 | rec_data.databuf[4];
+              HJ_INFO("msg distance: %f mm", tofmsg.left_range);
+          }
+          ray_msg.left_range = distance;
+          // ros::spinOnce();
+      } else {
+          HJ_ERROR("recv tof error: %d", ret);
+      }
+  }
+  ray_msg.timestamp = hj_bf::HJTime::now();
+  chatter_tof_pub_.publish(ray_msg);
+  // front_timer_.stop();
+  // side_timer_.start();
+
+    // 拉高，switch切到j172
+    usleep(1 * 1000);
+    system(SWITCH_TO_J172);
+    usleep(1* 1000);
+#endif
+  // ros::Time end = ros::Time::now();
+  // HJ_INFO("front time sec:%d, nsec:%d, end sec:%d, nsec:%d, diff=%d", start.sec, start.nsec, end.sec, end.nsec, (end.nsec-start.nsec));
+}
+
+void Ulsound::readSide(const hj_bf::HJTimerEvent &)  // 串口发送线程函数
+{
+  // ros::Time start = ros::Time::now();
+  static ser_Data *snd = &snd_data;
+  static int ret;
+
+  snd->databuf[0] = 0x10;
+  int i = 0;
+  // read left uss J165
+  ret = write(fd_side, snd->databuf, 1);
+  if (ret > 0) {
+    ret = read(fd_side, &(rec_data.databuf[0]), 8);
+    if (ret > 0 && !(ret%4)) {
+      if (rec_data.databuf[13] ==
+          ((rec_data.databuf[10] + rec_data.databuf[11] + rec_data.databuf[12])
+            & 0xff)) {
+        msg.back = rec_data.databuf[11] * 256 + rec_data.databuf[12];
+        // HJ_INFO("recv left uss J165 success,recv size is %d, len: %d", ret, msg.back);
+      } else {
+        HJ_ERROR("left uss J165 sum error");
+      }
+      // HJ_INFO("left uss J165 recv len %d", ret);
+    } else {
+      HJ_ERROR("recv left uss J165 error %d", ret);
+    }
+  } else {
+    HJ_ERROR("send left uss J165 error!");
+  }
+  // msg.id = hj_interface::Ultra::BACK;
+  msg.id = 2;
+  msg.timestamp = hj_bf::HJTime::now();
+  chatter_pub_.publish(msg);
+  // side_timer_.stop();
+  // front_timer_.start();
+
+  // 1:J171, 0:J165
+  /* 收发完以后切换一定要加延迟 */
+  usleep(1*1000);
+  system(SWITCH_TO_J171);
+  usleep(1*1000);
+
+  // read left uss J171
+  ret = write(fd_side,  snd->databuf, 1);
+  if (ret > 0) {
+      ret = read(fd_side, &(rec_data.databuf[20]), 8);
+      if (ret > 0 && !(ret%4)) {
+          if (rec_data.databuf[23] ==
+              ((rec_data.databuf[20] + rec_data.databuf[21] + rec_data.databuf[22]) & 0xff)) {
+            msg.mid = rec_data.databuf[21]*256 + rec_data.databuf[22];
+            // HJ_INFO("recv left uss J171 success,recv size is %d, len: %d", ret, msg.mid);
+          } else {
+            HJ_ERROR("left uss J171 sum error!");
+          }
+          // HJ_INFO("left uss J171 recv len %d", ret);
+      } else {
+        HJ_ERROR("recv left uss J171 error: %d", ret);
+      }
+  } else {
+      HJ_ERROR("send left uss J171 error!");
+  }
+  // msg.id = hj_interface::Ultra::MID;
+  msg.id = 1;
+  msg.timestamp = ros::Time::now();
+  chatter_pub_.publish(msg);
+
+  /* 收发完以后切换一定要加延迟 */
+  // ros::Time time = ros::Time::now();
+  // HJ_INFO("time sec:%d, nsec:%d", time.sec, time.nsec);
+  usleep(1*1000);
+  system(SWITCH_TO_J165);
+  usleep(1*1000);
+  // ros::Time end = ros::Time::now();
+  // HJ_INFO("time sec:%d, nsec:%d, end sec:%d, nsec:%d, diff=%d", start.sec, start.nsec, end.sec, end.nsec, (end.nsec-start.nsec));
+
+}
+
+Ulsound::Ulsound(const rapidjson::Value &json_conf) : hj_bf::Function(json_conf) {
+  // read your config
+
+  init_gpio();
+
+  for (int i = 0; i < ULS_CNT; i++) {
+    snd_data.serfd[i] = -1;
+    rec_data.serfd[i] = -1;
+  }
+
+  if (uart_init() == 0) {
+    HJ_ERROR("minos open ulsound error!");
+  } else {
+    fd_front = snd_data.serfd[0];
+    fd_side = snd_data.serfd[1];
+
+    chatter_pub_ = hj_bf::HJAdvertise<hj_interface::Ultra>("ulsound_chatter", 1000);
+    chatter_tof_pub_ = hj_bf::HJAdvertise<hj_interface::Ray>("range_data", 1000);
+    // TODO(wh) :2024-2-6 update
+    // 目前统计front:32ms, side:52ms执行时间
+    front_timer_ = hj_bf::HJCreateTimer("front_timer_", 40 * 1000, &Ulsound::readFront, this);  // 10Hz
+    side_timer_ = hj_bf::HJCreateTimer("side_timer_", 60 * 1000, &Ulsound::readSide, this);  // 10Hz
+    // side_timer_.stop();
+  }
+
+  // your code
+}
+}  // namespace collect_node_ulsound

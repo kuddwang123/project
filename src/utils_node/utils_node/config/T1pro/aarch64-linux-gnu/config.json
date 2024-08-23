@@ -1,0 +1,21 @@
+{
+  "so_dir":"./",
+  "functions": [
+    {
+      "ID": "core_dump",
+      "name": "core_dump",
+      "dump_path": "/userdata/hj/log/core_dump/dump_middleware_node"
+    },
+    {
+      "ID": "log_redirect",
+      "name": "log_redirect",
+      "err_log_file_path": "/userdata/hj/log/logging/",
+      "cout_log_file_path": ""
+    },
+    {
+        "ID": "health_monitor",
+        "name": "health_monitor",
+        "test_transmit": "well come health_monitor"
+    }
+  ]
+}

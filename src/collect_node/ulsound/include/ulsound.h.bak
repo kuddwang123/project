@@ -1,0 +1,40 @@
+// @file ulsound.h
+// @brief
+//
+// Copyright 2023 HJ Technology Co.Ltd. All rights reserved.
+// Authors: 609384347@qq.com (wangqing, 2023-12-22)
+#ifndef INCLUDE_ULSOUND_H  // your macro
+#define INCLUDE_ULSOUND_H
+#include "function_factory.h"
+#include "node_factory.h"
+
+namespace collect_node_ulsound {  // your namespace
+#define ULS_CNT 2            // 实际串口数量
+#define ULTRA_TRIPLE_MODE 1
+typedef struct serial_data {
+  unsigned char databuf[32];  // 发送/接受数据
+  int serfd[ULS_CNT];         // 串口文件描述符
+} ser_Data;
+
+class Ulsound : public hj_bf::Function {
+ public:
+  explicit Ulsound(const rapidjson::Value &json_conf);
+  ~Ulsound() {}
+  void readFront(const hj_bf::HJTimerEvent &);
+  void readSide(const hj_bf::HJTimerEvent &);
+
+ private:
+  // your variables
+  // hj_bf::HJPublisher pub_;
+  // hj_bf::HJClient client_;
+  // hj_bf::HJSubscriber sub_;
+  // hj_bf::HJServer service_;
+  // hj_bf::HJTimer timer_;
+  hj_bf::HJPublisher chatter_pub_;      // 超声数据pub
+  hj_bf::HJPublisher chatter_tof_pub_;  // tof数据pub
+  hj_bf::HJTimer front_timer_;
+  hj_bf::HJTimer side_timer_;
+};
+}  // namespace collect_node_ulsound
+
+#endif

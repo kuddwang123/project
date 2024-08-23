@@ -1,0 +1,88 @@
+{
+  "so_dir":"./",
+  "functions": [
+      {
+        "ID": "core_dump",
+        "name": "core_dump",
+        "dump_path": "/tmp/dump_collect_node"
+      },
+      {
+        "ID": "log_redirect",
+        "name": "log_redirect",
+        "err_log_file_path": "",
+        "cout_log_file_path": ""
+      },
+      {
+        "ID": "magnetometers",
+        "name": "magnetometers",
+        "frequency": 10
+      },
+      {
+        "ID": "ulsound",
+        "name": "ulsound",
+        "test_transmit": "well come ulsound"
+      },
+      {
+        "ID": "turbidity",
+        "name": "turbidity",
+        "frequency": 1000
+      },
+      {
+        "ID": "mcu",
+        "name": "mcu",
+        "enable_keylog":1,
+        "mcu_para":{
+          "port":"/dev/ttyS0",
+          "baudRate":500000,
+          "flowCtl":0,
+          "dataBits":8,
+          "stopBits":1,
+          "parity":"N"
+        }
+      },
+      {
+        "ID": "mcuota",
+        "name": "mcuota",
+        "mcu_para":{
+          "port":"/dev/ttyS0",
+          "baudRate":500000,
+          "flowCtl":0,
+          "dataBits":8,
+          "stopBits":1,
+          "parity":"N"
+        }
+      },
+      {
+        "ID": "iot",
+        "name": "iot",
+        "cert_dir":"/userdata/.cert"
+      },
+      {
+        "ID": "pressure",
+        "name": "pressure",
+        "pressure": 1000
+      },
+      {
+        "ID": "imu",
+        "name": "imu",
+        "frequency": 2
+      },
+      {
+        "ID": "record_msg",
+        "name": "record_msg",
+        "enable": 1,
+        "dir":"/userdata/hj/log/sensor_data",
+        "space_limit": 360
+      },
+      {
+        "ID": "posttunnel",
+        "name": "posttunnel",
+	"queueSize":100,
+	"loadFailSec":60
+      },
+      {
+        "ID": "self_check",
+        "name": "self_check"
+      }
+  ]
+}
