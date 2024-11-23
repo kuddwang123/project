@@ -38,7 +38,7 @@ struct DownLeft_
    typedef ros::Time _timestamp_type;
   _timestamp_type timestamp;
 
-   typedef uint8_t _ray_value_type;
+   typedef uint16_t _ray_value_type;
   _ray_value_type ray_value;
 
 
@@ -128,12 +128,12 @@ struct MD5Sum< ::hj_interface::DownLeft_<ContainerAllocator> >
 {
   static const char* value()
   {
-    return "325366b738b13afa660bf980f3269583";
+    return "062dd5d316d5c49da43699ee24b432d4";
   }
 
   static const char* value(const ::hj_interface::DownLeft_<ContainerAllocator>&) { return value(); }
-  static const uint64_t static_value1 = 0x325366b738b13afaULL;
-  static const uint64_t static_value2 = 0x660bf980f3269583ULL;
+  static const uint64_t static_value1 = 0x062dd5d316d5c49dULL;
+  static const uint64_t static_value2 = 0xa43699ee24b432d4ULL;
 };
 
 template<class ContainerAllocator>
@@ -153,7 +153,8 @@ struct Definition< ::hj_interface::DownLeft_<ContainerAllocator> >
   static const char* value()
   {
     return "time timestamp \n"
-"uint8 ray_value  #!< 下视红外， 0: 有遮挡, 1: 无遮挡.\n"
+"uint16 ray_value  #!< P3.5版本 下视红外， 0: 有遮挡, 1: 无遮挡.\n"
+"                  #!< P4版本 下视tof， 0-500mm.\n"
 ;
   }
 
@@ -195,7 +196,7 @@ struct Printer< ::hj_interface::DownLeft_<ContainerAllocator> >
     s << indent << "timestamp: ";
     Printer<ros::Time>::stream(s, indent + "  ", v.timestamp);
     s << indent << "ray_value: ";
-    Printer<uint8_t>::stream(s, indent + "  ", v.ray_value);
+    Printer<uint16_t>::stream(s, indent + "  ", v.ray_value);
   }
 };
 

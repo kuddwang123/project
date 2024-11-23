@@ -30,6 +30,7 @@ struct PeriodicWeekdayTask_
     , start_time()
     , taskExecute(0)
     , smart(0)
+    , under_water(0)
     , clean_areas()
     , clean_mode(0)  {
     }
@@ -39,6 +40,7 @@ struct PeriodicWeekdayTask_
     , start_time(_alloc)
     , taskExecute(0)
     , smart(0)
+    , under_water(0)
     , clean_areas(_alloc)
     , clean_mode(0)  {
   (void)_alloc;
@@ -60,6 +62,9 @@ struct PeriodicWeekdayTask_
 
    typedef int32_t _smart_type;
   _smart_type smart;
+
+   typedef int32_t _under_water_type;
+  _under_water_type under_water;
 
    typedef std::vector< ::hj_interface::CleanAreas_<ContainerAllocator> , typename std::allocator_traits<ContainerAllocator>::template rebind_alloc< ::hj_interface::CleanAreas_<ContainerAllocator> >> _clean_areas_type;
   _clean_areas_type clean_areas;
@@ -101,6 +106,7 @@ bool operator==(const ::hj_interface::PeriodicWeekdayTask_<ContainerAllocator1> 
     lhs.start_time == rhs.start_time &&
     lhs.taskExecute == rhs.taskExecute &&
     lhs.smart == rhs.smart &&
+    lhs.under_water == rhs.under_water &&
     lhs.clean_areas == rhs.clean_areas &&
     lhs.clean_mode == rhs.clean_mode;
 }
@@ -159,12 +165,12 @@ struct MD5Sum< ::hj_interface::PeriodicWeekdayTask_<ContainerAllocator> >
 {
   static const char* value()
   {
-    return "7e72fd9ae92674838365cc432d3b0b3c";
+    return "2c62d947f3a52514ae6bbe8e2026952a";
   }
 
   static const char* value(const ::hj_interface::PeriodicWeekdayTask_<ContainerAllocator>&) { return value(); }
-  static const uint64_t static_value1 = 0x7e72fd9ae9267483ULL;
-  static const uint64_t static_value2 = 0x8365cc432d3b0b3cULL;
+  static const uint64_t static_value1 = 0x2c62d947f3a52514ULL;
+  static const uint64_t static_value2 = 0xae6bbe8e2026952aULL;
 };
 
 template<class ContainerAllocator>
@@ -188,6 +194,7 @@ struct Definition< ::hj_interface::PeriodicWeekdayTask_<ContainerAllocator> >
 "string start_time\n"
 "int32 taskExecute  #表示当天任务是否生效 0-不生效 1-生效\n"
 "int32 smart        # 0-普通模式 1-智能模式\n"
+"int32 under_water  # 0-不是水下模式 1-水下模式\n"
 "CleanAreas[] clean_areas\n"
 "int32 clean_mode   # 1-变频 2-标准 3-深度\n"
 "================================================================================\n"
@@ -218,6 +225,7 @@ namespace serialization
       stream.next(m.start_time);
       stream.next(m.taskExecute);
       stream.next(m.smart);
+      stream.next(m.under_water);
       stream.next(m.clean_areas);
       stream.next(m.clean_mode);
     }
@@ -248,6 +256,8 @@ struct Printer< ::hj_interface::PeriodicWeekdayTask_<ContainerAllocator> >
     Printer<int32_t>::stream(s, indent + "  ", v.taskExecute);
     s << indent << "smart: ";
     Printer<int32_t>::stream(s, indent + "  ", v.smart);
+    s << indent << "under_water: ";
+    Printer<int32_t>::stream(s, indent + "  ", v.under_water);
     s << indent << "clean_areas[]" << std::endl;
     for (size_t i = 0; i < v.clean_areas.size(); ++i)
     {

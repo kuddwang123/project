@@ -134,7 +134,10 @@ ssize_t hjlog_append(void* log, unsigned int level,
     //char buf[len] = {0};
     char* buf = new char[len]; //clang tidy require
     struct stat fstat;
-    stat(usr->_file->data(), &fstat);
+    int res = stat(usr->_file->data(), &fstat);
+    if (res != 0) {
+       return 0;
+    }
     ssize_t written = 0;
 
     if(needtime) {
@@ -193,7 +196,10 @@ ssize_t mcukey_append(void* log, const char *format, ...)
     //char buf[len] = {0};
     char* buf = new char[len]; //clang tidy require
     struct stat fstat;
-    stat(usr->_file->data(), &fstat);
+    int res = stat(usr->_file->data(), &fstat);
+    if (res != 0) {
+       return 0;
+    }
     ssize_t written = 0;
     
     time_t now = time(NULL);

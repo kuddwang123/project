@@ -271,6 +271,7 @@ CoreDump::CoreDump(const rapidjson::Value &json_conf) : hj_bf::Function(json_con
   } else {
     boost::filesystem::create_directories(dump_file_name);
   }
+  hj_bf::registerSignal();
   HJ_IMPORTANT("minos just a CoreDump");
 }
 

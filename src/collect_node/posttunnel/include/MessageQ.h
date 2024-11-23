@@ -9,16 +9,14 @@ class FileMessage
 public:
     explicit FileMessage(const File& file, uint8_t type,
                 bool needDelete);
-    FileMessage(const std::string id,
+
+    explicit FileMessage(const std::string id,
         uint8_t type,
         bool needDelete, 
         const std::string& filepath,
         const std::string& filepathca,
         time_t ts,
-        const std::string& url,
-        const std::string& md5,
-        uint32_t urlexpire,
-        time_t urlTs
+        const std::string& md5
         );
     ~FileMessage();
     
@@ -32,10 +30,12 @@ public:
     File getCacheHandler();
     std::string getMd5();
     uint32_t getExpire();
+    uint64_t getLogId();
     uint8_t getType();
     void setUrl(const std::string url);
     void setUrlExpire(uint32_t expire);
     void setUrlGenTs(time_t ts);
+    void setLogId(uint64_t logid);
     void clearUrl();
     void incrFailTimes();
     void clearFailTimes();
@@ -59,6 +59,7 @@ private:
     time_t urlTs_;
     uint8_t failTimes_;
     uint8_t maxTimes_;
+    uint64_t controlLogId_;
 };
 
 typedef std::shared_ptr<FileMessage> FileMsgPtr;

@@ -18,6 +18,7 @@
 #include "status_code.h"
 #include "node_cache.h"
 #include "std_msgs/Bool.h"
+#include "std_msgs/Float64.h"
 #include "hj_interface/TripleUltra.h"
 #include "hj_interface/LeftBack.h"
 #include "hj_interface/LeftFront.h"
@@ -28,6 +29,7 @@
 #define DEV_PATH_SIDE      "/dev/ttyWCH2"
 #define SWITCH_PATH_SIDE   "/dev/gpiosw-uls"
 #define ERROR_COUNT 10
+#define OUTWATER_DISTANCE 65531  // 65531mm,代表单波出水
 
 
 namespace collect_node_ulsound {  // your namespace
@@ -41,8 +43,7 @@ class Ulsound : public hj_bf::Function {
   explicit Ulsound(const rapidjson::Value &json_conf);
   ~Ulsound();
  private:
-  void ReadFront();
-  void ReadSide();
+  void ReadFront(const hj_bf::HJTimerEvent &);
   void ReadSideFront();
   void ReadSideBack();
   void ReadDown();
@@ -51,8 +52,11 @@ class Ulsound : public hj_bf::Function {
   void PushSideBackError();
   void PushDownError();
   void RestartCallback(const std_msgs::Bool::ConstPtr& msg);
+  void TimeDiffCallback(const std_msgs::Float64::ConstPtr& msg);
+  ros::Time GetTimeNow();
   bool Start();
  private:
+  std::atomic<bool> restart_flag_{false};  // 重启标志
   bool front_init_status_{false};  // 初始化状态
   bool side_init_status_{false};  // 初始化状态
   bool side_front_init_status_{false};  // 初始化状态
@@ -66,7 +70,8 @@ class Ulsound : public hj_bf::Function {
   int side_front_error_count_{0};
   int side_back_error_count_{0};
   int down_error_count_{0};
-  int side_switch_fd_{-1};
+  int front_uls_frequency_{70};
+  std::atomic<double> time_diff_{0.0};  // system time and RTC time diff
   ser_Data front_data_;
   ser_Data rec_data_;
   std::mutex mutex_;
@@ -82,11 +87,13 @@ class Ulsound : public hj_bf::Function {
   hj_bf::HJSubscriber restart_sub_;
   hj_bf::HJPublisher left_front_pub_;
   hj_bf::HJPublisher left_back_pub_;
-  hj_bf::HJPublisher down_left_pub_;
+  hj_bf::HJPublisher down_right_pub_;
   hj_interface::TripleUltra triple_ultra_msg_;
   hj_interface::LeftFront left_front_msg_;
   hj_interface::LeftBack left_back_msg_;
   hj_interface::DownRight down_right_msg_;
+  hj_bf::HJSubscriber sub_time_diff_;
+  hj_bf::HJTimer triple_timer_;
 };
 }  // namespace collect_node_ulsound
 

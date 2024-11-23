@@ -7,9 +7,9 @@ if [ $# == 1 ]; then
   echo ${node_path}
 fi
 mkdir /tmp/log
-export ROS_LOG_DIR=/tmp/log
-export HJ_LOG_CONFIG_PATH=${node_path}/src/hj_manager/T1pro/config/amd64/hj_log.config
+export HJ_NODE_CONFIG_FILE=${node_path}/src
 export LOG_RECORDER_NEW_PATH=${node_path}/src/hj_manager/T1pro/config/amd64/log_recorder.json
+export BIG_DATA_CONFIG_FILE=${node_path}/src/hj_manager/x9/config/amd64/big_data_config.json
 export LD_LIBRARY_PATH=${node_path}/src/hj_interface/platforms/amd64:${LD_LIBRARY_PATH}
 echo $LD_LIBRARY_PATH
 while true; do
@@ -29,9 +29,6 @@ do
 	kill -s 9 $item
 	echo "kill -s -9 $item"
 done
-rosparam set /hj_so_path "${node_path}/devel/lib"
-rosparam set /hj_config_path "${node_path}/src"
-#rosparam set /hj_log_config_path "${node_path}/src/hj_manager/config/hj_log.config"
 ./log_recorder > /dev/null &
 
 ${node_path}devel/lib/collect_node/collect_node &

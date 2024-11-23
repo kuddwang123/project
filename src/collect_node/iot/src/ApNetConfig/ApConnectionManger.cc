@@ -140,7 +140,7 @@ bool ApNetConfigManger::apDataParser(const std::string in, std::string& rnout, s
     return true;
 }
 
-void ApNetConfigManger::apReport(const std::string& key, const std::string& payload)
+void ApNetConfigManger::apReport(const std::string& key, const std::string& payload, const std::string& session)
 {
     rapidjson::Document doc;
     doc.SetObject();
@@ -159,16 +159,23 @@ void ApNetConfigManger::apReport(const std::string& key, const std::string& payl
     doc.Accept(writer); 
 
     std::string value = buffer.GetString();
-    HJ_INFO("report:\n%s\n", value.data());
+    HJ_INFO("ap report to [%s]:\n%s\n", session.c_str(), value.data());
 
     std::string xor_encry = utils::xor_encrypt(value);
     std::string base64_encry = base64_encode(xor_encry);
     base64_encry += '\n';
 
-    {
+    if (session.empty()) {
         std::unique_lock<std::mutex> lock(mtx_);
         for (const auto& tcp: clientTcpVec_) {
             if (tcp->isActive()) {
+                tcp->writeToBuf(base64_encry.data(), base64_encry.size());
+            }
+        }
+    } else {
+        std::unique_lock<std::mutex> lock(mtx_);
+        for (const auto& tcp: clientTcpVec_) {
+            if (tcp->id() == session && tcp->isActive()) {
                 tcp->writeToBuf(base64_encry.data(), base64_encry.size());
             }
         }

@@ -133,7 +133,10 @@ ssize_t hjlog_append(void* log, unsigned int level,
     size_t len = 256 + data.length();
     char buf[len] = {0};
     struct stat fstat;
-    stat(usr->_file->data(), &fstat);
+    int res = stat(usr->_file->data(), &fstat);
+    if (res != 0) {
+       return 0;
+    }
     ssize_t written = 0;
 
     if(needtime) {

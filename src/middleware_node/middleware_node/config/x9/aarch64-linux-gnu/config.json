@@ -1,22 +1,47 @@
 {
-  "so_dir":"./",
+  "so_dir":"/data/hj/lib",
+  "log_path_config":"/data/hj/config/hj_log.config",
+  "all_log_close":true,
+  "node_log_close":false,
+  "node_name":"middleware_node",
+  "node_threads":4,
   "functions": [
       {
         "ID": "core_dump",
         "name": "core_dump",
-        "dump_path": "/tmp/dump_middleware_node"
+        "dump_path": "/userdata/hj/log/core_dump/dump_middleware_node"
       },
       {
         "ID": "log_redirect",
         "name": "log_redirect",
-        "err_log_file_path": "",
+        "err_log_file_path": "/userdata/hj/log/logging/",
         "cout_log_file_path": ""
       },
       {
-          "ID": "demo",
-          "name": "demo",
-          "test_transmit": "well come demo"
+        "ID": "ota_schedule",
+        "name": "ota_schedule",
+        "test_transmit": "well come ota_schedule"
+      },
+      {
+        "ID": "parse_sys_com",
+        "name": "parse_sys_com",
+        "test_transmit": "well come parse_sys_com"
+      },
+      {
+        "ID": "charge",
+        "name": "charge",
+        "test_transmit": "well come charge"
+      },
+      {
+        "ID": "task_manage",
+        "name": "task_manage",
+        "test_transmit": "well come task_manage"
+      },
+      {
+        "ID": "state_machine",
+        "name": "state_machine",
+        "test_transmit": "well come state_machine"
       }
-
   ]
+
 }

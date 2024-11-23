@@ -140,14 +140,14 @@ void InsertBigdata(const std::string& value, const std::string& param, uint8_t c
     temp_msg.appdata.push_back(temp_data);
     temp_msg.to = hj_interface::AppMsg::BIGDATA;
     PubMqttInstance().publish(temp_msg);
-    HJ_INFO("InsertBigdata pub immediate");
+    // HJ_INFO("InsertBigdata pub immediate");
   } else {
     hj_interface::BigDataSave temp_data;
     temp_data.key = kBigdataKey;
     temp_data.payload = value;
     temp_data.cmd = cmd;
     PubSaveInstance().publish(temp_data);
-    HJ_INFO("InsertBigdata pub save");
+    // HJ_INFO("InsertBigdata pub save");
   }
   if (IsPack(cmd)) {
     hj_interface::FileUpload temp_path;
@@ -199,8 +199,8 @@ void BigdataCollection::SaveCallback(const hj_interface::BigDataSave::ConstPtr& 
 }
 
 void BigdataCollection::CmdCallback(const hj_interface::BigdataUpload::ConstPtr& msg) {
-  HJ_INFO("CmdCallback in, payload:%s, upload_file:%s,type=%d", msg->payload.c_str(), msg->upload_file.c_str(),
-          msg->type);
+  // HJ_INFO("CmdCallback in, payload:%s, upload_file:%s,type=%d", msg->payload.c_str(), msg->upload_file.c_str(),
+  //         msg->type);
   big_data::InsertBigdata(msg->payload, msg->upload_file, (1 << (msg->type)));
 }
 void BigdataCollection::SendImmediateItems() {

@@ -31,6 +31,7 @@ struct SignalTask_
     , name_id()
     , start_time()
     , smart(0)
+    , under_water(0)
     , start_time_stamp()
     , clean_time(0)
     , clean_areas()
@@ -43,6 +44,7 @@ struct SignalTask_
     , name_id(_alloc)
     , start_time(_alloc)
     , smart(0)
+    , under_water(0)
     , start_time_stamp()
     , clean_time(0)
     , clean_areas(_alloc)
@@ -69,6 +71,9 @@ struct SignalTask_
 
    typedef int32_t _smart_type;
   _smart_type smart;
+
+   typedef int32_t _under_water_type;
+  _under_water_type under_water;
 
    typedef ros::Time _start_time_stamp_type;
   _start_time_stamp_type start_time_stamp;
@@ -117,6 +122,7 @@ bool operator==(const ::hj_interface::SignalTask_<ContainerAllocator1> & lhs, co
     lhs.name_id == rhs.name_id &&
     lhs.start_time == rhs.start_time &&
     lhs.smart == rhs.smart &&
+    lhs.under_water == rhs.under_water &&
     lhs.start_time_stamp == rhs.start_time_stamp &&
     lhs.clean_time == rhs.clean_time &&
     lhs.clean_areas == rhs.clean_areas &&
@@ -177,12 +183,12 @@ struct MD5Sum< ::hj_interface::SignalTask_<ContainerAllocator> >
 {
   static const char* value()
   {
-    return "d866aa412153b3194b0cd643c96afe3f";
+    return "ef390b8974242577cba2e023e413fdeb";
   }
 
   static const char* value(const ::hj_interface::SignalTask_<ContainerAllocator>&) { return value(); }
-  static const uint64_t static_value1 = 0xd866aa412153b319ULL;
-  static const uint64_t static_value2 = 0x4b0cd643c96afe3fULL;
+  static const uint64_t static_value1 = 0xef390b8974242577ULL;
+  static const uint64_t static_value2 = 0xcba2e023e413fdebULL;
 };
 
 template<class ContainerAllocator>
@@ -207,6 +213,7 @@ struct Definition< ::hj_interface::SignalTask_<ContainerAllocator> >
 "string name_id\n"
 "string start_time\n"
 "int32 smart        # 0-普通模式 1-智能模式\n"
+"int32 under_water  # 0-不是水下模式 1-水下模式\n"
 "time start_time_stamp\n"
 "int32 clean_time   # minutes\n"
 "CleanAreas[] clean_areas\n"
@@ -240,6 +247,7 @@ namespace serialization
       stream.next(m.name_id);
       stream.next(m.start_time);
       stream.next(m.smart);
+      stream.next(m.under_water);
       stream.next(m.start_time_stamp);
       stream.next(m.clean_time);
       stream.next(m.clean_areas);
@@ -274,6 +282,8 @@ struct Printer< ::hj_interface::SignalTask_<ContainerAllocator> >
     Printer<std::basic_string<char, std::char_traits<char>, typename std::allocator_traits<ContainerAllocator>::template rebind_alloc<char>>>::stream(s, indent + "  ", v.start_time);
     s << indent << "smart: ";
     Printer<int32_t>::stream(s, indent + "  ", v.smart);
+    s << indent << "under_water: ";
+    Printer<int32_t>::stream(s, indent + "  ", v.under_water);
     s << indent << "start_time_stamp: ";
     Printer<ros::Time>::stream(s, indent + "  ", v.start_time_stamp);
     s << indent << "clean_time: ";

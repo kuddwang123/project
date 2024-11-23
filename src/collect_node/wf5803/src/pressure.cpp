@@ -10,6 +10,7 @@
  */
 #include "pressure.h"
 #include "log.h"
+#include "shm_interface.h"
 
 HJ_REGISTER_FUNCTION(factory) {
   HJ_INFO("minos register factory,function_name:%s", FUNCTION_NAME);
@@ -25,6 +26,7 @@ bool PressureSensorWF::PressureGetData() {
   float fpressure = 0.0;
   int nominal_pressure = 0;
 
+  buffer[15] = 0;
   i2c_.I2cReadBytes(SLAVE_ADDR, SENSOR_STATUS_ADDR, &buffer[15], 1);
   while (1 != (buffer[15] & 0x01)) {  // status ==1 ready
     usleep(50 * 1000);
@@ -33,7 +35,8 @@ bool PressureSensorWF::PressureGetData() {
     i2c_.I2cReadBytes(SLAVE_ADDR, SENSOR_STATUS_ADDR, &buffer[15], 1);
     if (read_error_count_ > ERROR_COUNT) {  // 超过10次读取失败，认为出错
       read_error_count_ = 0;
-      HJ_WARN("function:%s, I2cReadBytes NOT REDY", __FUNCTION__);
+      uint8_t meansure_mode = MEANSURE_MODE;
+      i2c_.I2cWriteBytes(SLAVE_ADDR, SENSOR_CMD_ADDR, &meansure_mode, 1);
       return false;
     }
   }
@@ -58,15 +61,21 @@ bool PressureSensorWF::PressureGetData() {
   tmp = buffer[4] | static_cast<uint16_t>(buffer[3] << 8);
   tmp = tmp / TEMP_CONVERT_FACTOR;  // Temperature output with an LSB equals to (1/256)℃
 
+  // int depth_mm = (Nominal_pressure - pressure_data_) /10;  // unit: mm
+
   i2c_.I2cWriteBytes(SLAVE_ADDR, SENSOR_CMD_ADDR, &meansure_mode, 1);
 
   pub_msg_.pressure = nominal_pressure;
   pub_msg_.temp = tmp;
-  pub_msg_.timestamp = hj_bf::HJTime::now();
+  pub_msg_.timestamp = GetTimeNow();
   return true;
 }
 
 void PressureSensorWF::PressureTimer(const hj_bf::HJTimerEvent &) {
+  bool res = hj_bf::getVariable("module_restart_flag", module_restart_flag_);
+  if (res && module_restart_flag_ == 1) {
+    return;
+  }
   bool ret = PressureGetData();
   if (ret) {
     if (!status_) {
@@ -83,7 +92,11 @@ void PressureSensorWF::PressureTimer(const hj_bf::HJTimerEvent &) {
       srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::ERROR;
       hj_bf::HjPushSrv(srv_msg_);
       status_ = false;
+      HJ_WARN("function:%s, read data error", __FUNCTION__);
     }
+    pub_msg_.pressure = 0;
+    pub_msg_.temp = 0;
+    chatter_pub_.publish(pub_msg_);
     error_count_++;
   }
 }
@@ -96,6 +109,34 @@ void PressureSensorWF::RestartCallback(const std_msgs::Bool::ConstPtr& msg) {
   if (msg->data != 0 && !init_status_) {
     HJ_INFO("restart PressureSensorWF");
     Start();
+  }
+}
+
+void PressureSensorWF::TimeDiffCallback(const std_msgs::Float64::ConstPtr& msg) {
+  time_diff_.store(msg->data);
+}
+
+ros::Time PressureSensorWF::GetTimeNow() {
+  double time_now = ros::Time::now().toSec();
+  double time_diff = time_diff_.load() * 0.001;
+  double time_now_diff = time_now - time_diff;
+  static int error_count = 0;
+  if (time_now_diff < 0) {
+    error_count++;
+    if (error_count < 10) {
+      HJ_ERROR("time_diff_chatter error, time_now:%lf, time_diff:%lf, time_now_diff:%lf", time_now, time_diff, time_now_diff);
+    }
+    return ros::Time::now();
+  } else if (time_now_diff > std::numeric_limits<uint32_t>::max()) {
+    error_count++;
+    if (error_count < 10) {
+      HJ_ERROR("time_diff_chatter error, time_now:%lf, time_diff:%lf, time_now_diff:%lf", time_now, time_diff, time_now_diff);
+    }
+    return ros::Time::now();
+  } else {
+    error_count = 0;
+    ros::Time now_time = ros::Time().fromSec(time_now_diff);
+    return now_time;
   }
 }
 
@@ -129,9 +170,13 @@ PressureSensorWF::PressureSensorWF(const rapidjson::Value &json_conf) : hj_bf::F
       i2c_.SetDev(dev_path);
     }
   }
+  if (json_conf.HasMember("pressure") && json_conf["pressure"].IsInt()) {
+    pressure_data_ = json_conf["pressure"].GetInt();
+  }
 
   chatter_pub_ = hj_bf::HJAdvertise<hj_interface::Depth>("depth_chatter", 10);
   restart_sub_ = hj_bf::HJSubscribe("/xxx", 1, &PressureSensorWF::RestartCallback, this);
+  sub_time_diff_ = hj_bf::HJSubscribe("/time_diff_chatter", 1, &PressureSensorWF::TimeDiffCallback, this);
 
   // your code
   if (Start()) {

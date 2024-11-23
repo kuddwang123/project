@@ -16,6 +16,7 @@
 #include "status_code.h"
 #include "node_cache.h"
 #include "std_msgs/Bool.h"
+#include "std_msgs/Float64.h"
 #include "hj_interface/Depth.h"
 #include "hj_interface/HealthCheckCode.h"
 
@@ -39,15 +40,21 @@ class PressureSensorWF : public hj_bf::Function {
   bool PressureGetData();
   void RestartCallback(const std_msgs::Bool::ConstPtr& msg);
   bool Start();
+  void TimeDiffCallback(const std_msgs::Float64::ConstPtr& msg);
+  ros::Time GetTimeNow();
  private:
   bool init_status_{false};  // 初始化状态
   bool status_{true};
   int error_count_{0};
   int read_error_count_{0};
+  int module_restart_flag_{0};
+  int pressure_data_{1000};  // 初始压力值
   uint32_t frequency_{50};  // param for PressureSensorWF
+  std::atomic<double> time_diff_{0.0};  // system time and RTC time diff
   hj_bf::I2C i2c_{DEV_PATH};
   hj_bf::HJPublisher chatter_pub_;
   hj_bf::HJSubscriber restart_sub_;
+  hj_bf::HJSubscriber sub_time_diff_;
   hj_bf::HJTimer loop_timer_;
   hj_interface::Depth pub_msg_;
   hj_interface::HealthCheckCode srv_msg_;

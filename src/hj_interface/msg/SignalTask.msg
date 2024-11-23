@@ -4,6 +4,7 @@ string overrideID  #表示要覆盖的任务的名称
 string name_id
 string start_time
 int32 smart        # 0-普通模式 1-智能模式
+int32 under_water  # 0-不是水下模式 1-水下模式
 time start_time_stamp
 int32 clean_time   # minutes
 CleanAreas[] clean_areas

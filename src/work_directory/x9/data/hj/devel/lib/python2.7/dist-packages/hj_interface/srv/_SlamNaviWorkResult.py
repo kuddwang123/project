@@ -6,24 +6,46 @@ python3 = True if sys.hexversion > 0x03000000 else False
 import genpy
 import struct
 
+import hj_interface.msg
 
 class SlamNaviWorkResultRequest(genpy.Message):
-  _md5sum = "6eb56731533b0dbee7979e5055514f36"
+  _md5sum = "6780dadfd82ff48a1242ff97b6767c6f"
   _type = "hj_interface/SlamNaviWorkResultRequest"
   _has_header = False  # flag to mark the presence of a Header object
-  _full_text = """uint8 action_cmd        # 1: 建图 2: 重定位 
-                        # 11: 清扫 
-                        # 21: 召回 22: 回充
+  _full_text = """uint8 action_cmd            # 1: 建图 2: 重定位 
+                            # 11: 清扫 
+                            # 16：navi建图/重定位延边 17：navi极限延边
+                            # 18: 姿态调整
+                            # 21: 召回 22: 回充
 
-uint8 action_result     # 1: slam建图成功 2: slam建图失败 
-                        # 11: slam定位成功 12: slam定位失败 
-                        # 21: navi清扫成功 22: navi清扫失败
-                        # 41: navi召回成功 42: navi召回失败 
-                        # 51: navi回充成功 52: navi回充失败
+uint8 action_result         # 1: slam建图成功 2: slam建图失败 
+                            # 11: slam定位成功 12: slam定位失败 
+                            # 21: navi清扫成功 22: navi清扫失败
+                            # 26：建图/重定位延边停止 27：极限延边停止
+                            # 31：navi姿态调整成功 32：navi姿态调整失败
+                            # 41: navi召回成功 42: navi召回失败 
+                            # 51: navi回充成功 52: navi回充失败 
+CleanRecord CleanRecord     # 清扫记录
 
-"""
-  __slots__ = ['action_cmd','action_result']
-  _slot_types = ['uint8','uint8']
+
+================================================================================
+MSG: hj_interface/CleanRecord
+float32 clean_speed             # 清洁速度 单位：m/s
+float32 surface_clean_area      # 清洁水面面积 单位：m2
+float32 bottom_clean_area       # 清洁池底面积
+float32 wall_clean_area         # 清洁池壁面积
+float32 pool_area               # 泳池面积
+float32 pool_volume             # 泳池体积
+string map_line_file_path       # 地图轨迹文件路径
+
+## not to be reported for the time being
+#uint8 avoid_obstacles          # 避障次数
+#int32 get_out_time             # 脱困时长 单位：秒
+#uint8 get_out_failed           # 脱困失败次数
+#uint8 get_out_success          # 脱困成功次数
+#float32 supple_clean_area      # 补扫面积 """
+  __slots__ = ['action_cmd','action_result','CleanRecord']
+  _slot_types = ['uint8','uint8','hj_interface/CleanRecord']
 
   def __init__(self, *args, **kwds):
     """
@@ -33,7 +55,7 @@ uint8 action_result     # 1: slam建图成功 2: slam建图失败
     changes.  You cannot mix in-order arguments and keyword arguments.
 
     The available fields are:
-       action_cmd,action_result
+       action_cmd,action_result,CleanRecord
 
     :param args: complete set of field values, in .msg order
     :param kwds: use keyword arguments corresponding to message field names
@@ -46,9 +68,12 @@ uint8 action_result     # 1: slam建图成功 2: slam建图失败
         self.action_cmd = 0
       if self.action_result is None:
         self.action_result = 0
+      if self.CleanRecord is None:
+        self.CleanRecord = hj_interface.msg.CleanRecord()
     else:
       self.action_cmd = 0
       self.action_result = 0
+      self.CleanRecord = hj_interface.msg.CleanRecord()
 
   def _get_types(self):
     """
@@ -63,7 +88,13 @@ uint8 action_result     # 1: slam建图成功 2: slam建图失败
     """
     try:
       _x = self
-      buff.write(_get_struct_2B().pack(_x.action_cmd, _x.action_result))
+      buff.write(_get_struct_2B6f().pack(_x.action_cmd, _x.action_result, _x.CleanRecord.clean_speed, _x.CleanRecord.surface_clean_area, _x.CleanRecord.bottom_clean_area, _x.CleanRecord.wall_clean_area, _x.CleanRecord.pool_area, _x.CleanRecord.pool_volume))
+      _x = self.CleanRecord.map_line_file_path
+      length = len(_x)
+      if python3 or type(_x) == unicode:
+        _x = _x.encode('utf-8')
+        length = len(_x)
+      buff.write(struct.Struct('<I%ss'%length).pack(length, _x))
     except struct.error as se: self._check_types(struct.error("%s: '%s' when writing '%s'" % (type(se), str(se), str(locals().get('_x', self)))))
     except TypeError as te: self._check_types(ValueError("%s: '%s' when writing '%s'" % (type(te), str(te), str(locals().get('_x', self)))))
 
@@ -75,11 +106,22 @@ uint8 action_result     # 1: slam建图成功 2: slam建图失败
     if python3:
       codecs.lookup_error("rosmsg").msg_type = self._type
     try:
+      if self.CleanRecord is None:
+        self.CleanRecord = hj_interface.msg.CleanRecord()
       end = 0
       _x = self
       start = end
-      end += 2
-      (_x.action_cmd, _x.action_result,) = _get_struct_2B().unpack(str[start:end])
+      end += 26
+      (_x.action_cmd, _x.action_result, _x.CleanRecord.clean_speed, _x.CleanRecord.surface_clean_area, _x.CleanRecord.bottom_clean_area, _x.CleanRecord.wall_clean_area, _x.CleanRecord.pool_area, _x.CleanRecord.pool_volume,) = _get_struct_2B6f().unpack(str[start:end])
+      start = end
+      end += 4
+      (length,) = _struct_I.unpack(str[start:end])
+      start = end
+      end += length
+      if python3:
+        self.CleanRecord.map_line_file_path = str[start:end].decode('utf-8', 'rosmsg')
+      else:
+        self.CleanRecord.map_line_file_path = str[start:end]
       return self
     except struct.error as e:
       raise genpy.DeserializationError(e)  # most likely buffer underfill
@@ -93,7 +135,13 @@ uint8 action_result     # 1: slam建图成功 2: slam建图失败
     """
     try:
       _x = self
-      buff.write(_get_struct_2B().pack(_x.action_cmd, _x.action_result))
+      buff.write(_get_struct_2B6f().pack(_x.action_cmd, _x.action_result, _x.CleanRecord.clean_speed, _x.CleanRecord.surface_clean_area, _x.CleanRecord.bottom_clean_area, _x.CleanRecord.wall_clean_area, _x.CleanRecord.pool_area, _x.CleanRecord.pool_volume))
+      _x = self.CleanRecord.map_line_file_path
+      length = len(_x)
+      if python3 or type(_x) == unicode:
+        _x = _x.encode('utf-8')
+        length = len(_x)
+      buff.write(struct.Struct('<I%ss'%length).pack(length, _x))
     except struct.error as se: self._check_types(struct.error("%s: '%s' when writing '%s'" % (type(se), str(se), str(locals().get('_x', self)))))
     except TypeError as te: self._check_types(ValueError("%s: '%s' when writing '%s'" % (type(te), str(te), str(locals().get('_x', self)))))
 
@@ -106,11 +154,22 @@ uint8 action_result     # 1: slam建图成功 2: slam建图失败
     if python3:
       codecs.lookup_error("rosmsg").msg_type = self._type
     try:
+      if self.CleanRecord is None:
+        self.CleanRecord = hj_interface.msg.CleanRecord()
       end = 0
       _x = self
       start = end
-      end += 2
-      (_x.action_cmd, _x.action_result,) = _get_struct_2B().unpack(str[start:end])
+      end += 26
+      (_x.action_cmd, _x.action_result, _x.CleanRecord.clean_speed, _x.CleanRecord.surface_clean_area, _x.CleanRecord.bottom_clean_area, _x.CleanRecord.wall_clean_area, _x.CleanRecord.pool_area, _x.CleanRecord.pool_volume,) = _get_struct_2B6f().unpack(str[start:end])
+      start = end
+      end += 4
+      (length,) = _struct_I.unpack(str[start:end])
+      start = end
+      end += length
+      if python3:
+        self.CleanRecord.map_line_file_path = str[start:end].decode('utf-8', 'rosmsg')
+      else:
+        self.CleanRecord.map_line_file_path = str[start:end]
       return self
     except struct.error as e:
       raise genpy.DeserializationError(e)  # most likely buffer underfill
@@ -119,12 +178,12 @@ _struct_I = genpy.struct_I
 def _get_struct_I():
     global _struct_I
     return _struct_I
-_struct_2B = None
-def _get_struct_2B():
-    global _struct_2B
-    if _struct_2B is None:
-        _struct_2B = struct.Struct("<2B")
-    return _struct_2B
+_struct_2B6f = None
+def _get_struct_2B6f():
+    global _struct_2B6f
+    if _struct_2B6f is None:
+        _struct_2B6f = struct.Struct("<2B6f")
+    return _struct_2B6f
 # This Python file uses the following encoding: utf-8
 """autogenerated by genpy from hj_interface/SlamNaviWorkResultResponse.msg. Do not edit."""
 import codecs
@@ -242,6 +301,6 @@ def _get_struct_B():
     return _struct_B
 class SlamNaviWorkResult(object):
   _type          = 'hj_interface/SlamNaviWorkResult'
-  _md5sum = 'bdf694fba846d4306a51c5471317296e'
+  _md5sum = '7aa3631b5d8a7a8b4ca0abd41f0e73e5'
   _request_class  = SlamNaviWorkResultRequest
   _response_class = SlamNaviWorkResultResponse

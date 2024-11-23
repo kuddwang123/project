@@ -154,12 +154,12 @@ struct MD5Sum< ::hj_interface::PeriodicTaskPkg_<ContainerAllocator> >
 {
   static const char* value()
   {
-    return "cc9a7aee54112feeb5406645992dca1d";
+    return "535b4cfa0b1077987817552a6d884b8b";
   }
 
   static const char* value(const ::hj_interface::PeriodicTaskPkg_<ContainerAllocator>&) { return value(); }
-  static const uint64_t static_value1 = 0xcc9a7aee54112feeULL;
-  static const uint64_t static_value2 = 0xb5406645992dca1dULL;
+  static const uint64_t static_value1 = 0x535b4cfa0b107798ULL;
+  static const uint64_t static_value2 = 0x7817552a6d884b8bULL;
 };
 
 template<class ContainerAllocator>
@@ -191,6 +191,7 @@ struct Definition< ::hj_interface::PeriodicTaskPkg_<ContainerAllocator> >
 "string start_time\n"
 "int32 taskExecute  #表示当天任务是否生效 0-不生效 1-生效\n"
 "int32 smart        # 0-普通模式 1-智能模式\n"
+"int32 under_water  # 0-不是水下模式 1-水下模式\n"
 "CleanAreas[] clean_areas\n"
 "int32 clean_mode   # 1-变频 2-标准 3-深度\n"
 "================================================================================\n"
@@ -204,6 +205,7 @@ struct Definition< ::hj_interface::PeriodicTaskPkg_<ContainerAllocator> >
 "string date\n"
 "string start_time\n"
 "int32 smart        # 0-普通模式 1-智能模式\n"
+"int32 under_water  # 0-不是水下模式 1-水下模式\n"
 "int32 interval_days\n"
 "CleanAreas[] clean_areas\n"
 "int32 clean_mode   # 1-变频 2-标准 3-深度\n"

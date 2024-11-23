@@ -1,9 +1,11 @@
 #include "AppCommunication.h"
 #include "AwsConnectionManager.h"
+#include "Persistence.h"
 #include "BuryPoint.h"
 #include "log.h"
 #include "hj_interface/WifiSet.h"
 #include "base64/base64.h"
+#include "hj_interface/SysAction.h"
 #include <boost/filesystem.hpp>
 #include <fstream>
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -11,7 +13,7 @@
 #include <sstream>
 
 HJ_REGISTER_FUNCTION(factory) {
-    std::cerr << "minos register factory" << FUNCTION_NAME << std::endl;
+    HJ_INFO("minos register factory, funtion_name:%s", FUNCTION_NAME);
     factory.registerCreater<collect_node_iot::AppCommunication>(FUNCTION_NAME);
 }
 
@@ -23,40 +25,43 @@ AppCommunication::AppCommunication(const rapidjson::Value& json_conf)
     certfile_(".cert.json"),
     tzmdir_("/userdata/.root/etc/"),
     tzmfile_("tzm.json"),
-    port_(8888)
+    port_(8888),
+    inWater_(255)
 {
-    appDataRouterPtr_ = std::make_shared<AppDataRouter>();
-    assert(appDataRouterPtr_);
-    
-    if (!boost::filesystem::is_directory(certdir_)) {
-        if (!boost::filesystem::create_directories(certdir_)) {
-            throw std::runtime_error("aws cert dir create fail!"); 
-        } else {
-            HJ_INFO("aws cert dir [%s] created successfully.", certdir_.c_str());
+    std::thread ([&]() {
+        appDataRouterPtr_ = std::make_shared<AppDataRouter>(certdir_+certfile_);
+        assert(appDataRouterPtr_);
+        
+        if (!boost::filesystem::is_directory(certdir_)) {
+            if (!boost::filesystem::create_directories(certdir_)) {
+                throw std::runtime_error("aws cert dir create fail!"); 
+            } else {
+                HJ_INFO("aws cert dir [%s] created successfully.", certdir_.c_str());
+            }
         }
-    }
 
-    if (!boost::filesystem::is_directory(tzmdir_)) {
-        if (!boost::filesystem::create_directories(tzmdir_)) {
-            throw std::runtime_error("aws cert dir create fail!"); 
-        } else {
-            HJ_INFO("timezone dir [%s] created successfully.", tzmdir_.c_str());
+        if (!boost::filesystem::is_directory(tzmdir_)) {
+            if (!boost::filesystem::create_directories(tzmdir_)) {
+                throw std::runtime_error("aws cert dir create fail!"); 
+            } else {
+                HJ_INFO("timezone dir [%s] created successfully.", tzmdir_.c_str());
+            }
         }
-    }
-    
-    certfilename_ = certdir_ + certfile_;
+        
+        certfilename_ = certdir_ + certfile_;
 
-    if (json_conf.HasMember("tcpPort") && json_conf["tcpPort"].IsInt()) {
-        port_ = json_conf["tcpPort"].GetInt();
-    }
+        if (json_conf.HasMember("tcpPort") && json_conf["tcpPort"].IsInt()) {
+            port_ = json_conf["tcpPort"].GetInt();
+        }
 
-    initialize();
+        initialize();
 
-    BuryPointPtr burypoint = BaseBuryPointFactory::instance().createBuryPoint(BaseBuryPointFactory::kNET_CONFIG);
-    assert(burypoint);
-    NetCfgBuryPointPtr netbp = std::dynamic_pointer_cast<NetConfigBuryPoint>(burypoint);   
-    netCfgPtr_ = std::make_unique<NetConfig>(appDataRouterPtr_, certfilename_, netbp);
-    assert(netCfgPtr_);
+        BuryPointPtr burypoint = BaseBuryPointFactory::instance().createBuryPoint(BaseBuryPointFactory::kNET_CONFIG);
+        assert(burypoint);
+        NetCfgBuryPointPtr netbp = std::dynamic_pointer_cast<NetConfigBuryPoint>(burypoint);   
+        netCfgPtr_ = std::make_unique<NetConfig>(appDataRouterPtr_, certfilename_, netbp);
+        assert(netCfgPtr_);
+     }).detach();
 }
 
 AppCommunication::~AppCommunication()
@@ -72,11 +77,19 @@ void AppCommunication::initialize()
 
     appDataSub_ = hj_bf::HJSubscribe("/to_collect", 1, &AppCommunication::middleWareDataCb, this);
 
+    resetSub_ = hj_bf::HJSubscribe("collect_node/notify/func", 1, &AppCommunication::collectNodeResetCb, this);
+
+    resetResPub_ = hj_bf::HJAdvertise<hj_interface::CollectBroadcast>("func/response/collect_node", 1);
+
     s3urlPub_ = hj_bf::HJAdvertise<std_msgs::String>("/s3url/response", 10);
 
     timePub_ = hj_bf::HJAdvertise<std_msgs::String>("/time/settime", 5);
 
     getLogPub_ = hj_bf::HJAdvertise<hj_interface::AppData>("/getLogRecord", 5);
+
+    toMidPub_ = hj_bf::HJAdvertise<std_msgs::String>("/to_middle", 10);
+
+    inwaterSub_ = hj_bf::HJSubscribe("/water_inspection", 1, &AppCommunication::inWaterCb, this);
 
     initIot();
 }
@@ -92,7 +105,7 @@ void AppCommunication::initIot()
                                            awsCertParser.thingname(), 
                                            awsCertParser.endpoint(), 
                                            awsCertParser.thingname())) {
-                appDataRouterPtr_->runIot();
+                appDataRouterPtr_->runIot(false);
             }
         } else {
             HJ_ERROR("cert parse [%s] error\n", certfilename_.c_str());
@@ -101,6 +114,57 @@ void AppCommunication::initIot()
     } else {
         HJ_INFO("cert file [%s] not exist\n", certfilename_.c_str());
     }
+}
+
+void AppCommunication::inWaterCb(const std_msgs::UInt8::ConstPtr& msg)
+{
+    HJ_INFO("receive in water:%d", msg->data);
+
+    if (inWater_ == 0 && msg->data == 1) {
+        appDataRouterPtr_->restartIot();
+    }
+    inWater_ = msg->data;
+}
+
+void AppCommunication::collectNodeResetCb(const hj_interface::CollectBroadcast::ConstPtr& msg)
+{
+    HJ_INFO("iot receive reset, act:%d\n", msg->action);
+    if (msg->action == hj_interface::SysAction::SYS_ACTION_RESTORE_FACTORY) {
+        HJ_INFO("iot factory reset\n");
+        iotFactoryReset();
+        Persistence::instance().reset();
+        HJ_INFO("iot factory reset done\n");
+    } else if (msg->action == hj_interface::SysAction::SYS_ACTION_SHUTDOWN ||
+            msg->action == hj_interface::SysAction::SYS_ACTION_SLEEP) {
+        HJ_INFO("iot stop\n");
+        appDataRouterPtr_->stopIot();
+        Persistence::instance().shutdown();
+        HJ_INFO("iot stop done\n");
+    }
+
+    hj_interface::CollectBroadcast response_msg;
+    response_msg.action = msg->action;
+    response_msg.ack = 0;
+    response_msg.function = 0;
+    resetResPub_.publish(response_msg);
+}
+
+void AppCommunication::iotFactoryReset()
+{
+    hj_interface::AppData appdata;
+    hj_interface::AppMsg appmsg;
+    rapidjson::Document rptDoc;
+    std::remove(certfilename_.data());
+    std::remove((tzmdir_+tzmfile_).data());
+    HJ_INFO("cert removed\n");
+    rptDoc.SetObject();
+    appdata.key = "FactoryRestoreReport";
+    appdata.payload = utils::documentToString(rptDoc);
+    appmsg.appdata.emplace_back(appdata);
+    appmsg.to = hj_interface::AppMsg::TOPIC | hj_interface::AppMsg::CLOUD;
+    appDataRouterPtr_->sendAppRpt(appmsg);
+    sleep(2);
+    appDataRouterPtr_->unbindIot();
 }
 
 bool AppCommunication::appDataHandler(const hj_interface::AppMsg& appmsg)
@@ -115,7 +179,19 @@ bool AppCommunication::appDataHandler(const hj_interface::AppMsg& appmsg)
     HJ_INFO("app data receive, size=%ld\n", appmsg.appdata.size());
 
     for (const auto& msg:appmsg.appdata) {
-        if (msg.key == "NetStat") {
+        if (msg.key == "FactoryTest") {
+            rapidjson::Document respDoc;
+            respDoc.SetObject();
+
+            hj_interface::AppData appdata;
+            appdata.key = "FactoryTest";
+            appdata.payload = utils::documentToString(respDoc);
+            respmsg.appdata.emplace_back(appdata);
+
+            appDataRouterPtr_->sendAppResp(respmsg);
+
+            dealtcnt++;
+        } else if (msg.key == "NetStat") {
             HJ_INFO("NetStat receive!\n");
     
             rapidjson::Document respDoc;
@@ -203,7 +279,8 @@ bool AppCommunication::appDataHandler(const hj_interface::AppMsg& appmsg)
 
             if (!config.Parse(msg.payload.data()).HasParseError()) {
                 std::string cert, key, thingname, endpoint, msg;
-                if (!netCfgPtr_->netConfig(config, appmsg.from)) {
+                if (!netCfgPtr_->netConfig(config, appmsg.from, appmsg.session)) {
+                    res = -1;
                     netbp->triggerBigDataRpt(false, NetConfigBuryPoint::kINTERNAL_INIT_FAIL);
                 }
             } else {
@@ -239,7 +316,9 @@ bool AppCommunication::appDataHandler(const hj_interface::AppMsg& appmsg)
                     id = config["id"].GetString();
                 }
 
-                netCfgPtr_->wifiSet(ssid, pwd, id, appmsg.from);
+                if (!netCfgPtr_->wifiSet(ssid, pwd, id, appmsg.from, appmsg.session)) {
+                    res = -1;
+                }
             } else {
                 res = -1;
                 HJ_ERROR("NetSwitch json parse error\n");
@@ -260,9 +339,10 @@ bool AppCommunication::appDataHandler(const hj_interface::AppMsg& appmsg)
             std_msgs::String pub;
             pub.data = msg.payload;
             s3urlPub_.publish(pub);
+            dealtcnt++;
         } else if (msg.key == "FactoryRestore") {
             HJ_INFO("FactoryRestore receive!\n");
-
+            pubAppUnbindToMid();
             rapidjson::Document respDoc;
             respDoc.SetObject();
             hj_interface::AppData appdata;
@@ -271,15 +351,15 @@ bool AppCommunication::appDataHandler(const hj_interface::AppMsg& appmsg)
             respmsg.appdata.emplace_back(appdata);
             appDataRouterPtr_->sendAppResp(respmsg);
             sleep(2);
-            appDataRouterPtr_->stopIot();
-            
-            std::remove(certfilename_.data());
-            std::remove((tzmdir_+tzmfile_).data());
+            iotFactoryReset();
 
-            //dealtcnt++;
-        } else if (msg.key == "GetLogRecord") {
-            HJ_INFO("GetLogRecord receive!\n");
+            dealtcnt++;
+        } else if (msg.key == "GetLogRecord" || msg.key == "PullDeviceLog") {
+            HJ_INFO("%s receive!\n", msg.key.c_str());
             getLogPub_.publish(msg);
+            if (msg.key == "PullDeviceLog") {
+                dealtcnt++;
+            }
         }
     }
 
@@ -345,6 +425,21 @@ std::string AppCommunication::timeZoneSet(const std::string& timeStr, const std:
         << utcTime.time_of_day().seconds();
 
     return oss.str();
+}
+
+void AppCommunication::pubAppUnbindToMid()
+{
+    rapidjson::Document document;
+    document.SetObject();
+
+    rapidjson::Value emptyObj(rapidjson::kObjectType);
+    
+    document.AddMember("appUnbind", emptyObj, document.GetAllocator());
+
+    std_msgs::String msg;
+    msg.data = utils::documentToString(document);
+    toMidPub_.publish(msg);
+    HJ_INFO("to mid pub: %s\n", msg.data.c_str());
 }
 
 void AppCommunication::middleWareDataCb(const std_msgs::String& msg)

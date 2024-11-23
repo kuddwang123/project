@@ -34,6 +34,7 @@ struct Imu_
     , accel_x(0)
     , accel_y(0)
     , accel_z(0)
+    , flag(0)
     , index(0)  {
     }
   Imu_(const ContainerAllocator& _alloc)
@@ -47,6 +48,7 @@ struct Imu_
     , accel_x(0)
     , accel_y(0)
     , accel_z(0)
+    , flag(0)
     , index(0)  {
   (void)_alloc;
     }
@@ -82,6 +84,9 @@ struct Imu_
 
    typedef int16_t _accel_z_type;
   _accel_z_type accel_z;
+
+   typedef uint8_t _flag_type;
+  _flag_type flag;
 
    typedef uint64_t _index_type;
   _index_type index;
@@ -125,6 +130,7 @@ bool operator==(const ::hj_interface::Imu_<ContainerAllocator1> & lhs, const ::h
     lhs.accel_x == rhs.accel_x &&
     lhs.accel_y == rhs.accel_y &&
     lhs.accel_z == rhs.accel_z &&
+    lhs.flag == rhs.flag &&
     lhs.index == rhs.index;
 }
 
@@ -182,12 +188,12 @@ struct MD5Sum< ::hj_interface::Imu_<ContainerAllocator> >
 {
   static const char* value()
   {
-    return "c3f4a9e0bb13a9f736bd9f1ddae855bc";
+    return "0fb0c67f020ea48dbb07fa5efabb5fc9";
   }
 
   static const char* value(const ::hj_interface::Imu_<ContainerAllocator>&) { return value(); }
-  static const uint64_t static_value1 = 0xc3f4a9e0bb13a9f7ULL;
-  static const uint64_t static_value2 = 0x36bd9f1ddae855bcULL;
+  static const uint64_t static_value1 = 0x0fb0c67f020ea48dULL;
+  static const uint64_t static_value2 = 0xbb07fa5efabb5fc9ULL;
 };
 
 template<class ContainerAllocator>
@@ -216,6 +222,7 @@ struct Definition< ::hj_interface::Imu_<ContainerAllocator> >
 "int16 accel_x\n"
 "int16 accel_y\n"
 "int16 accel_z\n"
+"uint8 flag    # 自校准状态：[0x00]未进入；[0x01]已进入\n"
 "uint64 index\n"
 ;
   }
@@ -245,6 +252,7 @@ namespace serialization
       stream.next(m.accel_x);
       stream.next(m.accel_y);
       stream.next(m.accel_z);
+      stream.next(m.flag);
       stream.next(m.index);
     }
 
@@ -284,6 +292,8 @@ struct Printer< ::hj_interface::Imu_<ContainerAllocator> >
     Printer<int16_t>::stream(s, indent + "  ", v.accel_y);
     s << indent << "accel_z: ";
     Printer<int16_t>::stream(s, indent + "  ", v.accel_z);
+    s << indent << "flag: ";
+    Printer<uint8_t>::stream(s, indent + "  ", v.flag);
     s << indent << "index: ";
     Printer<uint64_t>::stream(s, indent + "  ", v.index);
   }

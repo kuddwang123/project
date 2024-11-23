@@ -6,6 +6,7 @@
 namespace hj_bf {
 static bool CreateZipFileToDir(zip_t* zip_fd, const std::string& dir_path, const std::string& root_dir_path);
 static void AddZipFile(zip_t* zip_fd, const std::string& path, zip_source *source);
+static bool IsDirectoryEmpty(const std::string& path);
 
 static void AddZipFile(zip_t* zip_fd, const std::string& path, zip_source *source) {
   zip_int64_t idx = zip_file_add(zip_fd, path.data(), source, ZIP_FL_OVERWRITE|ZIP_FL_ENC_GUESS);
@@ -22,6 +23,10 @@ static void AddZipFile(zip_t* zip_fd, const std::string& path, zip_source *sourc
 
 static bool CreateZipFileToDir(zip_t* zip_fd, const std::string& dir_path, const std::string& root_dir_path) {
   boost::filesystem::path dir_path_obj(dir_path);
+  if (IsDirectoryEmpty(dir_path)) {
+    zip_dir_add(zip_fd, dir_path.c_str(), ZIP_FL_ENC_GUESS);
+    return true;
+  }
   for (boost::filesystem::directory_iterator it(dir_path_obj); it != boost::filesystem::directory_iterator(); ++it) {
     const boost::filesystem::path& file_path = it->path();
     if (boost::filesystem::is_directory(file_path)) {
@@ -46,6 +51,15 @@ static bool CreateZipFileToDir(zip_t* zip_fd, const std::string& dir_path, const
     }
   }
   return true;
+}
+
+static bool IsDirectoryEmpty(const std::string& path) {
+  boost::filesystem::path dir(path);
+  // 遍历目录
+  for (const auto& entry : boost::filesystem::directory_iterator(dir)) {
+    return false;  // 找到第一个文件，目录不为空
+  }
+  return true;  // 目录为空
 }
 
 bool CreateZipFileByDir(const std::string& zip_file_name, const std::string& dir_path) {

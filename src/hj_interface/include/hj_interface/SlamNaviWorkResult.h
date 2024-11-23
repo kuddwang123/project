@@ -40,7 +40,7 @@ template<>
 struct MD5Sum< ::hj_interface::SlamNaviWorkResult > {
   static const char* value()
   {
-    return "90e74ffd0ee046c4a06666f253e7ad07";
+    return "a7088b4b8c9eff4c59760b61d08ba6da";
   }
 
   static const char* value(const ::hj_interface::SlamNaviWorkResult&) { return value(); }

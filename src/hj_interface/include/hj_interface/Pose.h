@@ -15,9 +15,6 @@
 #include <ros/builtin_message_traits.h>
 #include <ros/message_operations.h>
 
-#include <std_msgs/Header.h>
-#include <geometry_msgs/PoseWithCovariance.h>
-#include <geometry_msgs/TwistWithCovariance.h>
 
 namespace hj_interface
 {
@@ -27,52 +24,57 @@ struct Pose_
   typedef Pose_<ContainerAllocator> Type;
 
   Pose_()
-    : header()
-    , child_frame_id()
-    , pose()
-    , twist()
-    , yaw(0.0)
-    , pitch(0.0)
+    : timestamp()
     , roll(0.0)
-    , type(0)  {
+    , pitch(0.0)
+    , yaw(0.0)
+    , x(0.0)
+    , y(0.0)
+    , z(0.0)
+    , type(0)
+    , is_six_dof(false)  {
     }
   Pose_(const ContainerAllocator& _alloc)
-    : header(_alloc)
-    , child_frame_id(_alloc)
-    , pose(_alloc)
-    , twist(_alloc)
-    , yaw(0.0)
-    , pitch(0.0)
+    : timestamp()
     , roll(0.0)
-    , type(0)  {
+    , pitch(0.0)
+    , yaw(0.0)
+    , x(0.0)
+    , y(0.0)
+    , z(0.0)
+    , type(0)
+    , is_six_dof(false)  {
   (void)_alloc;
     }
 
 
 
-   typedef  ::std_msgs::Header_<ContainerAllocator>  _header_type;
-  _header_type header;
+   typedef ros::Time _timestamp_type;
+  _timestamp_type timestamp;
 
-   typedef std::basic_string<char, std::char_traits<char>, typename std::allocator_traits<ContainerAllocator>::template rebind_alloc<char>> _child_frame_id_type;
-  _child_frame_id_type child_frame_id;
+   typedef float _roll_type;
+  _roll_type roll;
 
-   typedef  ::geometry_msgs::PoseWithCovariance_<ContainerAllocator>  _pose_type;
-  _pose_type pose;
-
-   typedef  ::geometry_msgs::TwistWithCovariance_<ContainerAllocator>  _twist_type;
-  _twist_type twist;
-
-   typedef double _yaw_type;
-  _yaw_type yaw;
-
-   typedef double _pitch_type;
+   typedef float _pitch_type;
   _pitch_type pitch;
 
-   typedef double _roll_type;
-  _roll_type roll;
+   typedef float _yaw_type;
+  _yaw_type yaw;
+
+   typedef float _x_type;
+  _x_type x;
+
+   typedef float _y_type;
+  _y_type y;
+
+   typedef float _z_type;
+  _z_type z;
 
    typedef uint8_t _type_type;
   _type_type type;
+
+   typedef uint8_t _is_six_dof_type;
+  _is_six_dof_type is_six_dof;
 
 
 
@@ -103,14 +105,15 @@ return s;
 template<typename ContainerAllocator1, typename ContainerAllocator2>
 bool operator==(const ::hj_interface::Pose_<ContainerAllocator1> & lhs, const ::hj_interface::Pose_<ContainerAllocator2> & rhs)
 {
-  return lhs.header == rhs.header &&
-    lhs.child_frame_id == rhs.child_frame_id &&
-    lhs.pose == rhs.pose &&
-    lhs.twist == rhs.twist &&
-    lhs.yaw == rhs.yaw &&
-    lhs.pitch == rhs.pitch &&
+  return lhs.timestamp == rhs.timestamp &&
     lhs.roll == rhs.roll &&
-    lhs.type == rhs.type;
+    lhs.pitch == rhs.pitch &&
+    lhs.yaw == rhs.yaw &&
+    lhs.x == rhs.x &&
+    lhs.y == rhs.y &&
+    lhs.z == rhs.z &&
+    lhs.type == rhs.type &&
+    lhs.is_six_dof == rhs.is_six_dof;
 }
 
 template<typename ContainerAllocator1, typename ContainerAllocator2>
@@ -143,22 +146,22 @@ struct IsMessage< ::hj_interface::Pose_<ContainerAllocator> const>
 
 template <class ContainerAllocator>
 struct IsFixedSize< ::hj_interface::Pose_<ContainerAllocator> >
-  : FalseType
+  : TrueType
   { };
 
 template <class ContainerAllocator>
 struct IsFixedSize< ::hj_interface::Pose_<ContainerAllocator> const>
-  : FalseType
+  : TrueType
   { };
 
 template <class ContainerAllocator>
 struct HasHeader< ::hj_interface::Pose_<ContainerAllocator> >
-  : TrueType
+  : FalseType
   { };
 
 template <class ContainerAllocator>
 struct HasHeader< ::hj_interface::Pose_<ContainerAllocator> const>
-  : TrueType
+  : FalseType
   { };
 
 
@@ -167,12 +170,12 @@ struct MD5Sum< ::hj_interface::Pose_<ContainerAllocator> >
 {
   static const char* value()
   {
-    return "309cca155b5af2dd272663421af0073b";
+    return "d90a8ad1f2317673bee674f9e87521d7";
   }
 
   static const char* value(const ::hj_interface::Pose_<ContainerAllocator>&) { return value(); }
-  static const uint64_t static_value1 = 0x309cca155b5af2ddULL;
-  static const uint64_t static_value2 = 0x272663421af0073bULL;
+  static const uint64_t static_value1 = 0xd90a8ad1f2317673ULL;
+  static const uint64_t static_value2 = 0xbee674f9e87521d7ULL;
 };
 
 template<class ContainerAllocator>
@@ -191,96 +194,15 @@ struct Definition< ::hj_interface::Pose_<ContainerAllocator> >
 {
   static const char* value()
   {
-    return "std_msgs/Header header\n"
-"string child_frame_id\n"
-"geometry_msgs/PoseWithCovariance pose\n"
-"geometry_msgs/TwistWithCovariance twist\n"
-"\n"
-"float64 yaw\n"
-"float64 pitch\n"
-"float64 roll\n"
+    return "time timestamp\n"
+"float32 roll\n"
+"float32 pitch\n"
+"float32 yaw\n"
+"float32 x\n"
+"float32 y\n"
+"float32 z\n"
 "uint8 type #!< id,0 means unknown,1 means static,2 means rotation,3 means straight\n"
-"\n"
-"================================================================================\n"
-"MSG: std_msgs/Header\n"
-"# Standard metadata for higher-level stamped data types.\n"
-"# This is generally used to communicate timestamped data \n"
-"# in a particular coordinate frame.\n"
-"# \n"
-"# sequence ID: consecutively increasing ID \n"
-"uint32 seq\n"
-"#Two-integer timestamp that is expressed as:\n"
-"# * stamp.sec: seconds (stamp_secs) since epoch (in Python the variable is called 'secs')\n"
-"# * stamp.nsec: nanoseconds since stamp_secs (in Python the variable is called 'nsecs')\n"
-"# time-handling sugar is provided by the client library\n"
-"time stamp\n"
-"#Frame this data is associated with\n"
-"string frame_id\n"
-"\n"
-"================================================================================\n"
-"MSG: geometry_msgs/PoseWithCovariance\n"
-"# This represents a pose in free space with uncertainty.\n"
-"\n"
-"Pose pose\n"
-"\n"
-"# Row-major representation of the 6x6 covariance matrix\n"
-"# The orientation parameters use a fixed-axis representation.\n"
-"# In order, the parameters are:\n"
-"# (x, y, z, rotation about X axis, rotation about Y axis, rotation about Z axis)\n"
-"float64[36] covariance\n"
-"\n"
-"================================================================================\n"
-"MSG: geometry_msgs/Pose\n"
-"# A representation of pose in free space, composed of position and orientation. \n"
-"Point position\n"
-"Quaternion orientation\n"
-"\n"
-"================================================================================\n"
-"MSG: geometry_msgs/Point\n"
-"# This contains the position of a point in free space\n"
-"float64 x\n"
-"float64 y\n"
-"float64 z\n"
-"\n"
-"================================================================================\n"
-"MSG: geometry_msgs/Quaternion\n"
-"# This represents an orientation in free space in quaternion form.\n"
-"\n"
-"float64 x\n"
-"float64 y\n"
-"float64 z\n"
-"float64 w\n"
-"\n"
-"================================================================================\n"
-"MSG: geometry_msgs/TwistWithCovariance\n"
-"# This expresses velocity in free space with uncertainty.\n"
-"\n"
-"Twist twist\n"
-"\n"
-"# Row-major representation of the 6x6 covariance matrix\n"
-"# The orientation parameters use a fixed-axis representation.\n"
-"# In order, the parameters are:\n"
-"# (x, y, z, rotation about X axis, rotation about Y axis, rotation about Z axis)\n"
-"float64[36] covariance\n"
-"\n"
-"================================================================================\n"
-"MSG: geometry_msgs/Twist\n"
-"# This expresses velocity in free space broken into its linear and angular parts.\n"
-"Vector3  linear\n"
-"Vector3  angular\n"
-"\n"
-"================================================================================\n"
-"MSG: geometry_msgs/Vector3\n"
-"# This represents a vector in free space. \n"
-"# It is only meant to represent a direction. Therefore, it does not\n"
-"# make sense to apply a translation to it (e.g., when applying a \n"
-"# generic rigid transformation to a Vector3, tf2 will only apply the\n"
-"# rotation). If you want your data to be translatable too, use the\n"
-"# geometry_msgs/Point message instead.\n"
-"\n"
-"float64 x\n"
-"float64 y\n"
-"float64 z\n"
+"bool is_six_dof\n"
 ;
   }
 
@@ -299,14 +221,15 @@ namespace serialization
   {
     template<typename Stream, typename T> inline static void allInOne(Stream& stream, T m)
     {
-      stream.next(m.header);
-      stream.next(m.child_frame_id);
-      stream.next(m.pose);
-      stream.next(m.twist);
-      stream.next(m.yaw);
-      stream.next(m.pitch);
+      stream.next(m.timestamp);
       stream.next(m.roll);
+      stream.next(m.pitch);
+      stream.next(m.yaw);
+      stream.next(m.x);
+      stream.next(m.y);
+      stream.next(m.z);
       stream.next(m.type);
+      stream.next(m.is_six_dof);
     }
 
     ROS_DECLARE_ALLINONE_SERIALIZER
@@ -325,25 +248,24 @@ struct Printer< ::hj_interface::Pose_<ContainerAllocator> >
 {
   template<typename Stream> static void stream(Stream& s, const std::string& indent, const ::hj_interface::Pose_<ContainerAllocator>& v)
   {
-    s << indent << "header: ";
-    s << std::endl;
-    Printer< ::std_msgs::Header_<ContainerAllocator> >::stream(s, indent + "  ", v.header);
-    s << indent << "child_frame_id: ";
-    Printer<std::basic_string<char, std::char_traits<char>, typename std::allocator_traits<ContainerAllocator>::template rebind_alloc<char>>>::stream(s, indent + "  ", v.child_frame_id);
-    s << indent << "pose: ";
-    s << std::endl;
-    Printer< ::geometry_msgs::PoseWithCovariance_<ContainerAllocator> >::stream(s, indent + "  ", v.pose);
-    s << indent << "twist: ";
-    s << std::endl;
-    Printer< ::geometry_msgs::TwistWithCovariance_<ContainerAllocator> >::stream(s, indent + "  ", v.twist);
-    s << indent << "yaw: ";
-    Printer<double>::stream(s, indent + "  ", v.yaw);
-    s << indent << "pitch: ";
-    Printer<double>::stream(s, indent + "  ", v.pitch);
+    s << indent << "timestamp: ";
+    Printer<ros::Time>::stream(s, indent + "  ", v.timestamp);
     s << indent << "roll: ";
-    Printer<double>::stream(s, indent + "  ", v.roll);
+    Printer<float>::stream(s, indent + "  ", v.roll);
+    s << indent << "pitch: ";
+    Printer<float>::stream(s, indent + "  ", v.pitch);
+    s << indent << "yaw: ";
+    Printer<float>::stream(s, indent + "  ", v.yaw);
+    s << indent << "x: ";
+    Printer<float>::stream(s, indent + "  ", v.x);
+    s << indent << "y: ";
+    Printer<float>::stream(s, indent + "  ", v.y);
+    s << indent << "z: ";
+    Printer<float>::stream(s, indent + "  ", v.z);
     s << indent << "type: ";
     Printer<uint8_t>::stream(s, indent + "  ", v.type);
+    s << indent << "is_six_dof: ";
+    Printer<uint8_t>::stream(s, indent + "  ", v.is_six_dof);
   }
 };
 

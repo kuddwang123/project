@@ -20,14 +20,20 @@
 #include <signal.h>
 #include <boost/filesystem.hpp>
 HJ_REGISTER_FUNCTION(factory) {
-  std::cerr << "minos register factory" << std::endl;
+  std::cerr << "minos register factory"<<FUNCTION_NAME << std::endl;
   factory.registerCreater<test_api::TestAPI>(FUNCTION_NAME);
 }
 
 namespace test_api {
+int so_func1() {
+  static int i = 0;
+  i++;
+  return i;
+}
   void crash() { volatile int* a = (int*)(NULL); *a = 1; }
 int TestAPI::loopFunc() {
   std::cerr << "minos in loopFunc" << std::endl;
+
   collect_node::TwoInts srv;
 //  ros::Rate loop_rate(1);
   int count = 0;
@@ -45,13 +51,27 @@ int TestAPI::loopFunc() {
 
     srv.request.a = 15;
     srv.request.b = 20;
-/*
-    if (client.call(srv)) {
-      ROS_INFO("Sum: %ld", (long int)srv.response.sum);
-    } else {
-      ROS_ERROR("Failed to call service add_two_ints");
-    }
-*/
+    // if(client.exists()){
+    //   if (client.call(srv)) {
+    //     ROS_INFO("Sum: %ld", (long int)srv.response.sum);
+    //   } else {
+    //     ROS_ERROR("Failed to call service add_two_ints");
+    //   }
+    // } else {
+    //   HJ_INFO("minos client not exists");
+    //   int ret = 0;
+    //   while(!ret){
+    //     ret = client.waitForExistence(1000*1000);
+    //     HJ_INFO("minos in waitForExistence");
+    //   }
+    //   HJ_INFO("minos client  exists");
+    // }
+      if (client.call(srv)) {
+        ROS_INFO("Sum: %ld", (long int)srv.response.sum);
+      } else {
+        ROS_ERROR("Failed to call service add_two_ints");
+      }
+/**/
 //    write(fds_[1], "n", 1);
     /**/
     usleep(1000000);
@@ -112,11 +132,13 @@ std::string GetTime() {
 
 void TestAPI::callback1(const hj_bf::HJTimerEvent &)
 {
+    // std::cout << "minos22222 so_func:" << test_load_so::so_func() << std::endl;
     static int test_err = 0;
 //    std::cerr << "minos test err:" << test_err << std::endl;
 //    std::cout << "minos2 test err:" << test_err << std::endl;
     test_err++;
     HJ_ERROR("minos2 in loopFunc %d",test_err);
+      // crash();
     int x = 1;
     int y = 1;
 //    HJ_CHECK_EQ3(1, 2, "my test1");
@@ -137,24 +159,34 @@ void TestAPI::callback1(const hj_bf::HJTimerEvent &)
       //   //       big_data::kBigdataImmediate|big_data::kBigdataPack);
         big_data::InsertBigdata(test_json);
 }
+
+bool add2(collect_node::TwoInts::Request& req, collect_node::TwoInts::Response& res) {
+  res.sum = req.a + req.b + 1;
+  ROS_INFO("request2: x=%ld, y=%ld", (long int)req.a, (long int)req.b);
+  ROS_INFO("  sending add2 response: [%ld]", (long int)res.sum);
+  return true;
+}
+
 TestAPI::TestAPI(const rapidjson::Value& json_conf) : hj_bf::Function(json_conf) {
 
   if (json_conf.HasMember("test_transmit") && json_conf["test_transmit"].IsString()) {
     std::string val_str = json_conf["test_transmit"].GetString();
     std::cerr << "minos get transmit:" << val_str << std::endl;
   }
+
+  blackboard = BT::Blackboard::create<ancp::StaticBlackboardRobinMap>();
 //  HJ_INFO("minos test %d",10);
 //  HJ_INFO("minos test" << 10);
 //  HJ_ERROR("minos233 test %s",ROSCONSOLE_DEFAULT_NAME);
-//    HJ_INFO("minos233 test" << ROSCONSOLE_DEFAULT_NAME);
+//  HJ_INFO("minos233 test" << ROSCONSOLE_DEFAULT_NAME);
 
 //  auto test_pub_test = hj_bf::HJAdvertise<std_msgs::String>("collect_testfffffffff", 1000);
   test_pub = hj_bf::HJAdvertise<std_msgs::String>("collect_test2", 1000);
   test_pub2 = hj_bf::HJAdvertise<std_msgs::String>("collect_test3", 1000);
-  // client = hj_bf::HJCreateClient<collect_node::TwoInts>("add_two_ints");
-   auto state = std::thread(&TestAPI::loopFunc, this);  // 开线程
-   state.detach();
-  timer1 = hj_bf::HJCreateTimer("timerloop", 1*1000 * 1000, &TestAPI::callback1, this);
+  client = hj_bf::HJCreateClient<collect_node::TwoInts>("add_two_ints");
+  //  auto state = std::thread(&TestAPI::loopFunc, this);  // 开线程
+  //  state.detach();
+  // timer1 = hj_bf::HJCreateTimer("timerloop", 1*1000 * 1000, &TestAPI::callback1, this);
   // test fd
 //  crash();
   if (pipe(fds_) == -1) {
@@ -168,6 +200,7 @@ TestAPI::TestAPI(const rapidjson::Value& json_conf) : hj_bf::Function(json_conf)
   flag |= O_NONBLOCK;
   fcntl(fds_[0], F_SETFL, flag);
   hj_bf::registerFdCtrl(fds_[0], std::bind(&FdcCallback, std::placeholders::_1));
+  test_service1_ = hj_bf::HJCreateServer("client1_test", add2);
 /*
   struct sigaction sa;
   sa.sa_handler = signalHandler;

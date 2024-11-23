@@ -18,9 +18,9 @@ public:
         std::string certfile, const NetCfgBuryPointPtr& netbp);
     ~NetConfig() {};
 
-    bool netConfig(const rapidjson::Document& config, uint8_t from);
+    bool netConfig(const rapidjson::Document& config, uint8_t from, const std::string& session);
     bool wifiSet(const std::string& ssid, const std::string& pwd,
-        const std::string& iv, uint8_t from);
+        const std::string& iv, uint8_t from, const std::string& session);
 
 private:
     enum configState{
@@ -39,8 +39,10 @@ private:
     hj_bf::HJSubscriber wifiConnSub_;
     hj_bf::HJSubscriber devInfoReportSub_;
     hj_bf::HJPublisher wifiPub_;
+    hj_bf::HJPublisher iotReadyPub_;
     unsigned char aeskey_[16];
     uint8_t wifiSetFrom_;
+    std::string sockSession_;
     hj_bf::HJTimer resetFlagTmr_;
 
 private:
@@ -52,13 +54,15 @@ private:
     bool isCertFileExist();
     bool postGetCert(const std::string& url, const std::string& data, const std::string& token, 
         const std::string& encryptkey, const std::string& aeskey, const std::string& aesiv,
-        std::string& res);
+        std::string& res, int& errcode);
     bool awsCertStoreAndRunIot(const std::string& data);
     bool storeAwsFile(const std::string& data);
     void netConfigResp(int8_t code, const std::string& msg);
     void resetFlagTmrCallBack(const hj_bf::HJTimerEvent&);
     void certGetRepot();
-    void sendErrorViaBt(int code, std::string msg = "");
+    void sendErrorRpt(int code, std::string msg = "");
+    void sendErrorRptImmedia(int code, uint8_t from, const std::string& session);
+    void iotConnPub(bool state);
 };
 
 } //namespace collect_node_iot

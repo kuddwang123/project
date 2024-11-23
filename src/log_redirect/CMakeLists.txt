@@ -4,6 +4,11 @@ project(${NODE_NAME})
 set (CMAKE_CXX_STANDARD 14)
 set( HJ_WORKSPACE_PATH "..")
 set(PLATFORM "amd64" CACHE STRING "amd64, i386, arm64_rk, etc.")
+if(${RELEASE_VER} STREQUAL "debug")
+
+elseif(${RELEASE_VER} STREQUAL "release")
+  add_definitions(-DCONFIG_ENABLE_LOG=4)
+endif()
 #SET( CMAKE_CXX_FLAGS "-g")
 find_package(catkin REQUIRED COMPONENTS rostime roscpp)
 

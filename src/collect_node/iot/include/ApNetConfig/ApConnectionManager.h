@@ -17,7 +17,7 @@ public:
     static const ApNetConfigManagerPtr& instance();
     void startSrvLoop(uint16_t port);
     void apSend(const std::string& key, const std::string& payload, int8_t res, const std::string& sessionId);
-    void apReport(const std::string& key, const std::string& payload);
+    void apReport(const std::string& key, const std::string& payload, const std::string& session);
     void dealDataReadFromAp(const std::string& data, const std::string& sessionId);
     void registerClient(const TcpTransportPtr& tcp);
     void setApDataHandler(const apDataJsonCb& cb) {apDataJsonCb_ = cb;}

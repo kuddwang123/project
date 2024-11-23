@@ -5,7 +5,8 @@
 #include <curl/easy.h>
 #include "rapidjson/document.h"
 #include <fstream>
-
+#include <mutex>
+#include <condition_variable>
 namespace collect_node_iot {
 
 namespace utils {
@@ -14,10 +15,13 @@ std::string documentToString(const rapidjson::Value& doc);
 bool hexStringToUnsignedCharArray(const std::string& hexstring, unsigned char* byteArray, size_t len);
 bool asciiStringToUnsignedCharArray(const std::string& asciistring, unsigned char* byteArray, size_t len);
 std::string aesCbc128Encode(const std::string& plaintext, unsigned char* key, unsigned char* iv);
-std::string aesCbc128Decode(const unsigned char* ciphertext, ssize_t ciphertext_len, unsigned char* key, unsigned char* iv);
+bool aesCbc128Decode(const unsigned char* ciphertext, ssize_t ciphertext_len, unsigned char* key, unsigned char* iv, std::string& out);
 std::string getIpAddrString();
 std::string xor_encrypt(const std::string& in);
 void replaceSpaceWithUnderline(std::string& str);
+std::string randomString(uint8_t length);
+std::string removeChar(const std::string& str, char ch);
+
 class DevInfo
 {
   public:
@@ -29,6 +33,7 @@ class DevInfo
     std::string version() const {return version_;}
     std::string bleName() const {return bleName_;}
     std::string waddr() const  {return waddr_;}
+    std::string mode() const {return mode_;}
 
   private:
     void parse();
@@ -40,6 +45,7 @@ class DevInfo
     std::string version_;
     std::string bleName_;
     std::string waddr_;
+    std::string mode_;
 };
 
 class AwsCertParser
@@ -61,6 +67,24 @@ class AwsCertParser
     std::string prikey_;
     std::string thingname_;
     std::string endpoint_;
+};
+
+class CountDownLatch
+{
+  public:
+    CountDownLatch(const CountDownLatch&) = delete;
+    void operator=(const CountDownLatch&) = delete;
+    CountDownLatch(int cnt);
+
+    int getCountDown();
+    void countDown();
+    bool await(bool wait);
+    void resetCount(int cnt);
+
+  private:
+    int count_;
+    std::mutex mtx_;
+    std::condition_variable cond_;
 };
 
 enum CurlFlag
@@ -102,6 +126,8 @@ public:
 	const char*	getResponseStr() const;
     //获取错误码
     int getErrorCode() const {return curlCode_;}
+    //根据code获取错误详细原因
+    static std::string getErrorByCode(int code);
     
 private:
 	static size_t writeCallback(void* pBuffer, size_t nSize, size_t nMemByte, void* pParam);

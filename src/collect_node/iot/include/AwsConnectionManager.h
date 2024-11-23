@@ -46,14 +46,17 @@ public:
     bool isConnected() const;
   
   //断开Aws连接
-    void disconnect();
+    bool disconnect();
   
   //开始Aws连接
-    void startConnect();
+    bool startConnect(bool sync = false);
   
   //开始Aws重连
     void startReconnect();
   
+  //注册Session处理回调
+    void setSessionDealCb(const ConStaChangeCb& cb) {sessionResumeCb_ = cb;}
+
   //注册Aws连接成功回调
     boost::signals2::connection addConnSuccSlot(const ConnDisConCb& slot);
   
@@ -66,6 +69,9 @@ public:
   //注册Aws连接断开/恢复回调
     boost::signals2::connection addConStatListener(const ConStaChangeCb& slot);
   
+  //断开所有连接事件信号函数
+    void disconnectAllConnSlots();
+
 private:
     std::string clientId_;
     Aws::Crt::String endpoint_;
@@ -74,9 +80,14 @@ private:
     uint16_t keepAliveTimeSecs_;
     uint32_t pingTimeoutMs_;
     uint32_t protocolOperationTimeoutMs_;
+    ConStaChangeCb sessionResumeCb_;
     std::atomic<bool> isConnect_;
+    std::atomic<bool> connEvtIncome_;
     bool connRun_;
+    bool syncConn_;
+    bool connRet_;
     int connFailIntervalSec_;
+    std::mutex connmtx_;
     std::thread connectThread_;
 
     std::condition_variable connCond_;
@@ -88,7 +99,7 @@ private:
     boost::signals2::signal<void(bool)> conchange_signal_;
 
 private:
-    void startConnectionThread();
+    bool startConnectionThread();
 
     void connectThreadFunc();
 

@@ -26,7 +26,8 @@ enum LogUploadTypes {
   kLogUploadPlanning = 6,
   kLogUploadApp = 7,
   kLogUploadUtils = 8,
-  kLogUploadReserve = 9
+  kLogUploadSensorData = 9,
+  kLogUploadReserve = 10
 };
 
 class LogUpload {
@@ -52,6 +53,7 @@ class LogUpload {
   bool PackPlanning(const std::string& timestamp_str, std::string& pack_name);
   bool PackApp(const std::string& timestamp_str, std::string& pack_name);
   bool PackUtils(const std::string& timestamp_str, std::string& pack_name);
+  bool PackSensorData(const std::string& timestamp_str, std::string& pack_name);
   bool PackAll(const std::string& timestamp_str, std::string& pack_name);
   bool Pack(enum LogUploadTypes type, std::string& pack_name);
   std::deque<hj_interface::AppData> deque_;
@@ -64,6 +66,7 @@ class LogUpload {
   std::string core_dump_dir_;
   std::string log_dir_;
   std::string error_dir_;
+  std::string sensor_data_;
 };
 }  // namespace log_upload
 #endif  //  INCLUDE_LOG_UPLOAD_H_  // NOLINT

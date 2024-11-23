@@ -14,8 +14,8 @@
 #include <fstream>
 #include "hjlog.h"
 #include "node_cache.h"
+#include "std_msgs/UInt16.h"
 #include "std_msgs/UInt32.h"
-#include "std_msgs/UInt8.h"
 #include "std_msgs/Float64.h"
 #include "rapidjson/document.h"
 #include "rapidjson/writer.h"
@@ -23,15 +23,21 @@
 #include "hj_interface/StationUltra.h"
 #include "hj_interface/PumpMotorSpeed.h"
 #include "hj_interface/FanMotorSpeed.h"
+#include "hj_interface/BootType.h"
+#include "hj_interface/AirBagStatus.h"
+#include "hj_interface/FlipCoverAck.h"
 #include <boost/filesystem.hpp>
+#include "shm_interface.h"
 
 HJ_REGISTER_FUNCTION(factory) {
-  std::cerr << "minos register factory" << FUNCTION_NAME << std::endl;
+  HJ_INFO("minos register factory, funtion_name:%s", FUNCTION_NAME);
   factory.registerCreater<collect_node_mcu::Mcu>(FUNCTION_NAME);
 }
 
 namespace collect_node_mcu {
 std::string g_machine_version = "P3.5";
+const std::array<std::string, 4> kNodes = {"slam_node", "planning_node",
+                                           "middleware_node", "utils_node"};
 
 Queue::Queue(unsigned int size)
     : size_(size), head_(0), tail_(0), buffer_(nullptr) {
@@ -107,7 +113,7 @@ UartDataHandler::UartDataHandler()
     : uart_lastByte_(0), uart_beginFlag_(false), uart_ctrlFlag_(false),
       uart_revOffset_(0), checkSum_(0), rxPackageDataCount_(0), time_update_(0),
       time_diff_(0), motorcnt_(0), imucnt_(0), keylogDir_("/userdata/hj/log/mcukey"), 
-      keylog_(nullptr) {}
+      writepip_(false), writeEnable_(true), pipfd_(-1), keylog_(nullptr) {}
 
 UartDataHandler::~UartDataHandler() {
   hj_cst_log_del(keylog_);
@@ -156,9 +162,49 @@ void UartDataHandler::reset() {
   if (uart_ != nullptr) {
     uart_->flushin();
   }
+
+  if (writepip_.load()) {
+    HJ_INFO("close pipe from reset\n");
+    writepip_.store(false);
+    if (pipfd_ > 0) {
+        ::close(pipfd_);
+    }
+    pipfd_ = -1;
+  }
+}
+
+void UartDataHandler::writeCtl(bool flag) {
+    writeEnable_.store(flag);
+}
+
+void UartDataHandler::setWritePipe(bool state, const char* fifo) {
+    if (state && writepip_.load()) {
+        return;
+    }
+
+    if (state) {
+        pipfd_ = ::open(fifo, O_WRONLY);
+        if (pipfd_ <= 0) {
+            HJ_ERROR("open pipe fail:%d\n", pipfd_);
+            pipfd_ = -1;
+            return;
+        }
+    }
+    writepip_.store(state);
+
+    if (!state) {
+        if (pipfd_ > 0) {
+            ::close(pipfd_);
+        }
+        pipfd_ = -1;
+    }
 }
 
 void UartDataHandler::writePackage2Uart(uint8_t *buf, uint8_t len) {
+  if (!writeEnable_.load()) {
+    return;
+  }
+
   int8_t i = 0;
   uint8_t *pBuf = nullptr;
   uint8_t SendBuf[64];
@@ -192,7 +238,7 @@ void UartDataHandler::writePackage2Uart(uint8_t *buf, uint8_t len) {
   *pBuf++ = FRAMETAIL;
 
   sendlen = pBuf - SendBuf;
-
+  
   uart_->send(SendBuf, sendlen);
 }
 
@@ -207,6 +253,10 @@ bool UartDataHandler::analyzePackage(McuImpl* mcuImpl) {
   
   for (int i = 0; i < byte_num; i++) {
     data = u_recvBuf_[i];
+    if (writepip_.load()) {
+        ::write(pipfd_, u_recvBuf_+i, 1);
+    }
+
     if (((data == FRAMEHEAD) && (uart_lastByte_ == FRAMEHEAD)) ||
         (uart_revOffset_ > MAX_PACKAGE_SIZE)) {
       // RESET
@@ -241,7 +291,7 @@ bool UartDataHandler::analyzePackage(McuImpl* mcuImpl) {
                 msg.right_msg = motor_msg->rw_speed / 1.0l;
                 msg.index = ++motorcnt_;
                 mcuImpl->motorPub(msg);
-#ifdef DEBUG
+#ifdef MSG_DEBUG
                 hj_interface::Atime time_msg;
                 time_msg.timestamp_current = ros::Time().now();
                 time_msg.timestamp_origin = msg.custom_time;
@@ -256,17 +306,28 @@ bool UartDataHandler::analyzePackage(McuImpl* mcuImpl) {
                 if (time_update_ == 0) {
                     time_diff_ = ros::Time::now().toSec() * 1000 - msg->time_ms;
                     time_update_ = 1;
-                    mcuImpl->pubFirstImuTime(msg->time_ms);
                     mcuImpl->pubTimeDiff(time_diff_sum_);
+                    // HJ_INFO("first imu time_diff: %lf, time_ms: %d\n", time_diff_, msg->time_ms);
                 }
+
                 if (time_update_ >= 6000) {  // 1 minuites sync
                     double now = ros::Time::now().toSec() * 1000;
                     time_diff_sum_ = now - static_cast<double>(msg->time_ms) - time_diff_;
                     time_update_ = 1;
-                    HJ_INFO("time_diff: %lf, now: %lf, msg->time_ms: %d, diff: %lf\n", time_diff_, now, msg->time_ms, time_diff_sum_);
+                    HJ_INFO("time_diff: %lf, now: %lf, msg->time_ms: %d, diff: %lf\n",
+                               time_diff_, now, msg->time_ms, time_diff_sum_);
                     mcuImpl->pubTimeDiff(time_diff_sum_);
                 }
                 time_update_++;
+                // 系统时间同步，立刻校准
+                if (mcuImpl->GetTimeSyncFlag()) {
+                  double now = ros::Time::now().toSec() * 1000;
+                  time_diff_sum_ = now - static_cast<double>(msg->time_ms) - time_diff_;
+                  HJ_INFO("sync time sync, time_diff: %lf, now: %lf, msg->time_ms: %d, diff: %lf\n",
+                               time_diff_, now, msg->time_ms, time_diff_sum_);
+                  mcuImpl->pubTimeDiff(time_diff_sum_);
+                  mcuImpl->SetTimeSyncFlag(false);
+                }
 
                 hj_interface::Imu Imu;
                 Imu.custom_time =
@@ -283,9 +344,10 @@ bool UartDataHandler::analyzePackage(McuImpl* mcuImpl) {
                 Imu.gyro_x = msg->gyrox;
                 Imu.gyro_y = msg->gyroy;
                 Imu.gyro_z = msg->gyroz;
-#ifdef DEBUG
+                Imu.flag = msg->flag;
                 Imu.index = ++imucnt_;
                 mcuImpl->imuPub(Imu);
+#ifdef MSG_DEBUG
                 hj_interface::Atime time_msg;
                 time_msg.timestamp_current = ros::Time().now();
                 time_msg.timestamp_origin = Imu.custom_time;
@@ -369,38 +431,39 @@ bool UartDataHandler::analyzePackage(McuImpl* mcuImpl) {
                         elecStatus->right_water_pump_status, elecStatus->airbag_status, elecStatus->fan_status,
                         elecStatus->flip_cover_motor_status);
 
-                        if (status == 1) {
-                            mcuImpl->setHealthError(2000, hj_interface::HealthCheckCodeRequest::FAILED);
-                        }
+                        // if (status == 1) {
+                        //     mcuImpl->setHealthError(2000, hj_interface::HealthCheckCodeRequest::FAILED);
+                        // }
                         mcuImpl->selfHealthCheckAck(MOTOR);
                         break;
                     }
                     case 1: {  // [0x01]IMU
                         HJ_INFO("MCU_SELF_CHECK imu_status: %d\n", status);
                         
-                        if (status == 1) {
-                            mcuImpl->setHealthError(2001, hj_interface::HealthCheckCodeRequest::FAILED);
-                        }
+                        // if (status == 1) {
+                        //     mcuImpl->setHealthError(2001, hj_interface::HealthCheckCodeRequest::FAILED);
+                        // }
                         mcuImpl->selfHealthCheckAck(IMU);
                         break;
                     }
                     case 2: {  // [0x02]BMS
                         HJ_INFO("MCU_SELF_CHECK bms_status: %d\n", status);
-                        if (status == 1) {
-                            mcuImpl->setHealthError(2002, hj_interface::HealthCheckCodeRequest::FAILED);
-                        }
+                        // if (status == 1) {
+                        //     mcuImpl->setHealthError(2002, hj_interface::HealthCheckCodeRequest::FAILED);
+                        // }
                         mcuImpl->selfHealthCheckAck(BMS);
                         break;
                     }
                     case 3: {  // [0x03]LORA模组
-                        if (status == 1) {
-                            mcuImpl->setHealthError(2003, hj_interface::HealthCheckCodeRequest::FAILED);
-                        }
+                        // if (status == 1) {
+                        //     mcuImpl->setHealthError(2003, hj_interface::HealthCheckCodeRequest::FAILED);
+                        // }
                         if (status != 2) {
                             mcuImpl->selfHealthCheckAck(LORA);
                         }
+                        mcuImpl->recordCheck("lora_status", status);
 
-                        // HJ_INFO("MCU_SELF_CHECK lora_status: %d\n", status);
+                        HJ_INFO("MCU_SELF_CHECK lora_status: %d\n", status);
                         break;
                     }
                     default: {
@@ -412,21 +475,35 @@ bool UartDataHandler::analyzePackage(McuImpl* mcuImpl) {
             }
             break;
 
-            case MCU_FAIL_CODE: {
-                uint8_t fail_code_count = m_pRxBuf[4];
-                for (uint8_t i = 0; i < fail_code_count; i++) {
-                    uint8_t fail_type = m_pRxBuf[i * 3 + 5];
-                    uint16_t fail_code = static_cast<uint16_t>(m_pRxBuf[i * 3 + 6] << 8 | m_pRxBuf[i * 3 + 7]);
-                    mcuImpl->setHealthError(fail_code, fail_type);
-                    HJ_INFO("MCU_FAIL_CODE fail_type:%d, fail_code:%d\n", fail_type, fail_code);
-                }
+            case MCU_HEALTH_CHECK: {
+              uint8_t fail_code_count = m_pRxBuf[4];
+              std::vector<uint16_t> fail_codes;
+              for (uint8_t i = 0; i < fail_code_count; i++) {
+                uint8_t fail_type = m_pRxBuf[i * 3 + 5];
+                uint16_t fail_code = static_cast<uint16_t>(m_pRxBuf[i * 3 + 7] << 8 | m_pRxBuf[i * 3 + 6]);
+                mcuImpl->setHealthError(fail_code, fail_type);
+                HJ_INFO("MCU_FAIL_CODE fail_type:%d, fail_code:%d\n", fail_type, fail_code);
+                fail_codes.push_back(fail_code);
+              }
+              mcuImpl->setHealthCheckAck(fail_codes, fail_code_count);
             }
             break;
+
+            // case MCU_FAIL_CODE: {
+            //     uint8_t fail_code_count = m_pRxBuf[4];
+            //     for (uint8_t i = 0; i < fail_code_count; i++) {
+            //         uint8_t fail_type = m_pRxBuf[i * 3 + 5];
+            //         uint16_t fail_code = static_cast<uint16_t>(m_pRxBuf[i * 3 + 7] << 8 | m_pRxBuf[i * 3 + 6]);
+            //         mcuImpl->setHealthError(fail_code, fail_type);
+            //         HJ_INFO("MCU_FAIL_CODE fail_type:%d, fail_code:%d\n", fail_type, fail_code);
+            //     }
+            // }
+            // break;
 
             case MCU_ONEKEY_TRIGGER: {
                 Key_msg* key_msg = reinterpret_cast<Key_msg*>(m_pRxBuf);
                 // HJ_INFO("key:%d %d\n", key_msg->flag, key_msg->value);
-               
+
                 mcuImpl->pubKeyCtlToMid(key_msg->flag, key_msg->value);
             }
             break;
@@ -478,9 +555,13 @@ bool UartDataHandler::analyzePackage(McuImpl* mcuImpl) {
             break;
 
             case OUTWATER_DETEC_ID: {
-                uint8_t state = *(m_pRxBuf+4);
+                OutWater_Detect_msg* msg = reinterpret_cast<OutWater_Detect_msg*>(m_pRxBuf);
+                std_msgs::UInt8MultiArray pubmsg;
+                pubmsg.data.push_back(msg->cap);
+                pubmsg.data.push_back(msg->hall_1);
+                pubmsg.data.push_back(msg->hall_2);
                 // HJ_INFO("out water state:%d\n", state);
-                mcuImpl->outwaterPub(state);
+                mcuImpl->outwaterPub(pubmsg);
             }
             break;
 
@@ -542,32 +623,26 @@ bool UartDataHandler::analyzePackage(McuImpl* mcuImpl) {
             break;
 #ifdef HJ_T1pro
             case DTOF_SENSOR_ID: {
+              if (g_machine_version == "T1pro_v2") {
                 hj_interface::LeftTof msg;
                 Tof_Sensor_msg* data = reinterpret_cast<Tof_Sensor_msg*>(m_pRxBuf);
-                uint16_t front = data->dist_front;  // 单位: mm
-                uint16_t left = data->dist_left;  // 单位: mm
-                if (front > 500) {  // tof 有效量程为 1~500mm
-                  msg.dist_front = 500;
-                } else {
-                  msg.dist_front = front;
-                }
-                if (left > 500) {
-                  msg.dist_back = 500;
-                } else {
-                  msg.dist_back = left;
-                }
+                msg.dist_front = data->dist_front;  // 单位: mm;
+                msg.dist_back = data->dist_left;  // 单位: mm
                 double time_now_ms = ros::Time::now().toSec() * 1000.0;
                 msg.timestamp = ros::Time().fromSec((time_now_ms - time_diff_sum_) / 1000.0);
                 mcuImpl->TofPub(msg);
+              }
             }
             break;
 
             case TURBIDITY_SENSOR_ID: {
-              hj_interface::Turbidity msg;
-              uint8_t turbidity = *(m_pRxBuf + 4);
-              msg.timestamp = ros::Time::now();
-              msg.turbidity = turbidity;
-              mcuImpl->TurbidityPub(msg);
+              if (g_machine_version == "T1pro_v2") {
+                hj_interface::Turbidity msg;
+                uint8_t turbidity = *(m_pRxBuf + 4);
+                msg.timestamp = ros::Time::now();
+                msg.turbidity = turbidity;
+                mcuImpl->TurbidityPub(msg);
+              }
             }
             break;
 
@@ -586,14 +661,20 @@ bool UartDataHandler::analyzePackage(McuImpl* mcuImpl) {
               if (g_machine_version == "P4") {
                 hj_interface::DownLeft msg;
                 Tof_Sensor_msg* data = reinterpret_cast<Tof_Sensor_msg*>(m_pRxBuf);
-                uint16_t left = data->dist_left;  // 单位: mm
-                if (left > 500) {  // tof 有效量程为 1~500mm
-                  msg.ray_value = 500;
-                } else {
-                  msg.ray_value = left;
-                }
+                msg.ray_value = data->dist_left;  // 单位: mm
                 double time_now_ms = ros::Time::now().toSec() * 1000.0;
-                msg.timestamp = ros::Time().fromSec((time_now_ms - time_diff_sum_) / 1000.0);
+                double time_now_s_diff = (time_now_ms - time_diff_sum_) / 1000.0;
+                static int time_error_cnt = 0;
+                if (time_now_s_diff < 0) {
+                  msg.timestamp = ros::Time().now();
+                  if (time_error_cnt < 5) {
+                    HJ_ERROR("time_now_s_diff < 0, time_now_ms:%lf, time_diff_sum_:%lf\n", time_now_ms, time_diff_sum_);
+                  }
+                  time_error_cnt++;
+                } else {
+                  time_error_cnt = 0;
+                  msg.timestamp = ros::Time().fromSec(time_now_s_diff);
+                }
                 mcuImpl->InfraredSensorPub(msg);
               }
             }
@@ -607,6 +688,112 @@ bool UartDataHandler::analyzePackage(McuImpl* mcuImpl) {
                 }
             }
             break;
+            case SENSOR_TEMP_ID: {
+                Sensor_Temp_msg* msg = reinterpret_cast<Sensor_Temp_msg*>(m_pRxBuf);
+                hj_interface::SensorTemp pubdata;
+                pubdata.pump_left = msg->pump_left;
+                pubdata.pump_right = msg->pump_right;
+                pubdata.left_motor = msg->left_motor;
+                pubdata.right_motor = msg->right_motor;
+                pubdata.turn = msg->turn;
+                mcuImpl->sensorTempPub(pubdata);
+            }
+            break;
+
+            case RTC_GET_ACK: {
+                Rtc_Time_Get_msg* msg = reinterpret_cast<Rtc_Time_Get_msg*>(m_pRxBuf);
+                mcuImpl->stopGetRtcTimer();
+                char time[64] = {0};
+                sprintf(time, "%02d-%02d-%02d %02d:%02d:%02d", msg->year, msg->month, msg->date,
+                    msg->hour, msg->min, msg->second);
+                mcuImpl->rtcPub(time);
+            }
+            break;
+
+            case MODULE_REBOOT_RES: {
+              uint8_t result = *(m_pRxBuf+4);
+              HJ_INFO("module reboot res:%d\n", result);
+              mcuImpl->PubModuleRebootResult(result);
+            }
+            break;
+
+            case ANGO_MSG_ID: {
+                Ango_Sensor_msg* msg = reinterpret_cast<Ango_Sensor_msg*>(m_pRxBuf);
+                HJ_INFO("receive ango: %d %d\n", msg->flag, msg->data);
+                mcuImpl->pubAngoReqToMid(msg->flag, msg->data);
+            }
+            break;
+
+            case BOOT_TYPE_RES: {
+                Boot_Type_Get_msg* msg = reinterpret_cast<Boot_Type_Get_msg*>(m_pRxBuf);
+                HJ_INFO("receive boot type: %d\n", msg->reason);
+                mcuImpl->stopGetBootTimer();
+                if (msg->reason == 0) {
+                    if (msg->data_1 == 0) {
+                        mcuImpl->bootTypePub(1, 255, 255);
+                    } else if (msg->data_1 == 1) {
+                        mcuImpl->bootTypePub(2, 255, 255);
+                    }
+                } else if (msg->reason == 1) {
+                    HJ_INFO("receive ango boot: %d %d\n", msg->data_1, msg->data_2);
+                    mcuImpl->bootTypePub(2, msg->data_1, msg->data_2);
+                } else if (msg->reason == 2) {
+                    mcuImpl->bootTypePub(3, 255, 255);
+                } else if (msg->reason == 3) {
+                    mcuImpl->bootTypePub(4, 255, 255);
+                }
+            }
+            break;
+
+            case TURN_MOTOR_HALL_ID: {
+              // HJ_INFO("receive turn motor hall\n");
+              std_msgs::UInt8 pubdata;
+              pubdata.data = *(m_pRxBuf+4);
+              mcuImpl->pubTurnMotorHall(pubdata);
+            }
+            break;
+
+            case IMPELLER_SPEED_ID: {
+              ImpellerSpeed_msg* msg = reinterpret_cast<ImpellerSpeed_msg*>(m_pRxBuf);
+              mcuImpl->pubImpellerSpeed(msg->speed);
+            }
+            break;
+
+            case WIRELESS_CHARGING_ID: {
+              // HJ_INFO("receive wireless charging\n");
+              Wireless_Charging_msg* msg = reinterpret_cast<Wireless_Charging_msg*>(m_pRxBuf);
+              mcuImpl->pubWirelessCharging(msg);
+            }
+            break;
+
+            case MCU_SENSORS_STATUS: {
+              // HJ_INFO("receive mcu sensors status\n");
+              McuSensorStatus_msg* msg = reinterpret_cast<McuSensorStatus_msg*>(m_pRxBuf);
+              mcuImpl->pubMcuSensorStatus(msg);
+            }
+            break;
+
+            case AIRBAG_STATUS_MSG: {
+              AirBagStatus_msg* msg = reinterpret_cast<AirBagStatus_msg*>(m_pRxBuf);
+              mcuImpl->airBagStatusPub(msg->state, msg->left);
+            }
+            break;
+
+            case AIRBAG_STATUS2_MSG: {
+              AirBagStatus_msg* msg = reinterpret_cast<AirBagStatus_msg*>(m_pRxBuf);
+              mcuImpl->airBagStatus2Pub(msg->state, msg->left);
+            }
+            break;
+
+            case BOOT_TIME_ACK: {
+              BootTime_msg* msg = reinterpret_cast<BootTime_msg*>(m_pRxBuf);
+              HJ_INFO("boot time:%d\n", msg->time);
+              if (msg->time != 0) {
+                mcuImpl->stopGetBootTimeTimer();
+                mcuImpl->pubBootTime(msg->time);
+              }
+            }
+            break;
 
             case MOTOR_MSG_ACK:
             case IMU_CALI_ACK:
@@ -617,7 +804,12 @@ bool UartDataHandler::analyzePackage(McuImpl* mcuImpl) {
             case TURBIN_CTL_ACK:
             case MCU_RESET_ACK:
             case LIGHT_STRIP_ACK:
-            case LIGHT_PEARL_ACK: {
+            case LIGHT_PEARL_ACK:
+            case MODULE_REBOOT_ACK:
+            case LOWPOWER_CTL_ACK:
+            case FACTORYMODULEACK:
+            case FACTORYAIRBAGCTRLACK:
+            case BLOCK_KEY_ACK: {
                 mcuImpl->sensorCtlAck(id, m_pRxBuf + 4);
                 break;
             }
@@ -697,13 +889,15 @@ void SensorCtl::init(uint32_t id, uint16_t len, UartDataHandler* uarthl,
 
 void SensorCtl::pushData(const std::vector<uint8_t>& data) {
     if (needCmpLast_) {
-        if (data == lastwrit_) {
+        if (data == lastpush_) {
             return;
         }
+        lastpush_ = data;
     }
-    
+
     uartdata udata(data);
     
+    HJ_INFO("PUSH");
     writeUart(udata);
 
     spinLock();
@@ -731,7 +925,7 @@ void SensorCtl::ack(uint8_t* ackdata) {
     uartdata& udata = queue_.front();
     if (needCheckAck_) {
         if (udata._data != data) {
-            HJ_ERROR("%d ack not equal\n", id_);
+            HJ_INFO("%02x ack not equal\n", id_);
             HJ_INFO("ack:\n");
             for (const auto& v: data) {
                 HJ_INFO("%02x ", v);
@@ -757,7 +951,7 @@ void SensorCtl::ack(uint8_t* ackdata) {
 
 void SensorCtl::writeUart(uartdata& data) {
     memcpy(uartdata_ + sizeof(head_)/sizeof(uint8_t), data._data.data(), len_);
-    HJ_INFO("send uart:%02x", id_);
+    HJ_INFO("send uart:%02x, %ld", id_, data._data.size());
     for (const auto& v: data._data) {
         HJ_INFO("%02x ", v);
     }
@@ -785,12 +979,14 @@ void SensorCtl::ackTimerCb(const hj_bf::HJTimerEvent&) {
 
     uartdata& udata = queue_.front();
     if (udata._maxcnt == 0) {
-        HJ_ERROR("send %02x time out!\n", id_);
+        HJ_INFO("send %02x time out!\n", id_);
         queue_.pop_front();
+        lastpush_.clear();
         spinUnLock();
         return;
     }
 
+    HJ_INFO("ACKTMR");
     writeUart(udata);
     spinUnLock();
 }
@@ -822,15 +1018,13 @@ McuImpl::~McuImpl() {
 bool McuImpl::run(int baud, int flowctl, int databit, int stopbit, int parity, bool keylog) {
   uartDataHandler_ = new UartDataHandler;
   assert(uartDataHandler_);
-  
   if (!uartDataHandler_->initialize(dev_, baud, flowctl, databit, stopbit, parity, keylog)) {
     HJ_ERROR("uart init fail!\n");
     return false;
   }
-  
   initSensorCtl();
 
-#ifdef DEBUG
+#ifdef MSG_DEBUG
   motor_time_pub_ = hj_bf::HJAdvertise<hj_interface::Atime>("motor_time_chatter", 10);
   imu_time_pub_ = hj_bf::HJAdvertise<hj_interface::Atime>("imu_time_chatter", 10);
 #endif
@@ -840,73 +1034,114 @@ bool McuImpl::run(int baud, int flowctl, int databit, int stopbit, int parity, b
   mcuota_pub_ = hj_bf::HJAdvertise<std_msgs::Bool>("mcuOtaReady", 1);
   motot_cur_pub_ = hj_bf::HJAdvertise<hj_interface::ElecMotorCur>("/motor_cur", 1);
   outof_water_pub_ = hj_bf::HJAdvertise<std_msgs::UInt8>("/outwater_detect", 1);
+  outwater_hall_pub_ = hj_bf::HJAdvertise<std_msgs::UInt8MultiArray>("/outwater_hall", 1);
   station_ultra_pub_ = hj_bf::HJAdvertise<hj_interface::StationUltra>("/station_ultra", 10);
-  to_middleware_pub_ = hj_bf::HJAdvertise<std_msgs::String>("/to_middle", 5);
+  to_middleware_pub_ = hj_bf::HJAdvertise<std_msgs::String>("/to_middle", 10);
   tempHumidity_pub_ = hj_bf::HJAdvertise<hj_interface::TempHumidity>("tempHumidity_chatter", 10);
   ret_charger_pub_ = hj_bf::HJAdvertise<std_msgs::UInt8>("/onCharger_chatter", 5);
   mcuVer_pub_ = hj_bf::HJAdvertise<std_msgs::String>("/mcuVer_chatter", 1, true);
   pump_motor_speed_pub_ = hj_bf::HJAdvertise<hj_interface::PumpMotorSpeed>("/pumpMotorSpeed_chatter", 1);
   fan_motor_speed_pub_ = hj_bf::HJAdvertise<hj_interface::FanMotorSpeed>("fanMotorSpeed_chatter", 1);
-  first_imu_pub_ = hj_bf::HJAdvertise<std_msgs::UInt32>("/machine_on/times", 1, true);
+  boot_time_pub_ = hj_bf::HJAdvertise<std_msgs::UInt32>("/machine_on/times", 1, true);
   time_diff_pub_ = hj_bf::HJAdvertise<std_msgs::Float64>("/time_diff_chatter", 1, true);
+  sensorTemp_pub_ = hj_bf::HJAdvertise<hj_interface::SensorTemp>("/sensor_temp_chatter", 1);
+  rtc_pub_ = hj_bf::HJAdvertise<std_msgs::String>("/factory/fromRtctime", 10);
+  bootType_pub_ = hj_bf::HJAdvertise<hj_interface::BootType>("/boot_type", 1, true);
+  turn_motor_hall_pub_ = hj_bf::HJAdvertise<std_msgs::UInt8>("/turn_motor_hall_chatter", 1, true);
+  wireless_charging_pub_ = hj_bf::HJAdvertise<hj_interface::WirelessCharging>("/wireless_charging_chatter", 1, true);
+  airbag_status_pub_ = hj_bf::HJAdvertise<hj_interface::AirBagStatus>("/AirBagStatus", 1);
+  airbag_status2_pub_ = hj_bf::HJAdvertise<hj_interface::AirBagStatus>("/AirBagStatusNew", 1);
+  impeller_speed_pub_ = hj_bf::HJAdvertise<std_msgs::UInt16>("/impeller_speed", 1);
+  flipcover_ack_pub_ = hj_bf::HJAdvertise<hj_interface::FlipCoverAck>("/flip_cover_ack", 1);
+  pub_func_response_ = hj_bf::HJAdvertise<hj_interface::CollectBroadcast>("func/response/collect_node", 10);  //factory restroed
 
 #ifdef HJ_T1pro
   tof_pub_ = hj_bf::HJAdvertise<hj_interface::LeftTof>("t1pro/left_tof", 10);
   infrared_sensor_pub_ = hj_bf::HJAdvertise<hj_interface::DownRay>("t1pro/down_ray", 10);
   turbidity_pub_ = hj_bf::HJAdvertise<hj_interface::Turbidity>("turbidity_data", 10);
   dust_plug_pub_ = hj_bf::HJAdvertise<hj_interface::DustPlugDetection>("t1pro/dust_plug_detection_chatter", 10);
+  mcu_sensor_status_pub_ = hj_bf::HJAdvertise<hj_interface::McuSensorStatusT1>("/mcu_sensor_status_chatter", 1, true);
 #else
+  mcu_sensor_status_pub_ = hj_bf::HJAdvertise<hj_interface::McuSensorStatus>("/mcu_sensor_status_chatter", 1, true);
   if (g_machine_version == "P3.5" || g_machine_version == "P4") {
     infrared_sensor_pub_ = hj_bf::HJAdvertise<hj_interface::DownLeft>("x9/down_left", 10);
   } else {
     infrared_sensor_pub_ = hj_bf::HJAdvertise<hj_interface::DownRay>("x9/down_ray", 10);
   }
 #endif
-
-  sub_motor_set_ = hj_bf::HJSubscribe("nav_motor", 1, 
+  std::thread async_sub([&]() {
+    sub_motor_set_ = hj_bf::HJSubscribe("nav_motor", 1, 
                                       &McuImpl::motor_set_chatterCallback, this);
-  sub_airbag_ = hj_bf::HJSubscribe("/air_bag", 1,
-                                   &McuImpl::airbagCb, this);
-  /*
-  sub_steerpump_ = hj_bf::HJSubscribe("/steer_pump", 1,
-                                   &McuImpl::steerPumpCb, this);
-  */
-  sub_flipcover_ = hj_bf::HJSubscribe("/flip_cover", 1,
-                                   &McuImpl::flipCoverCb, this);
-  sub_pumpsteer_ = hj_bf::HJSubscribe("/pump_steer", 1,
-                                   &McuImpl::pumpSteerCb, this);
-  sub_turbin_motor_ = hj_bf::HJSubscribe("/turbine_motor", 1,
-                                   &McuImpl::turbinMotorCb, this);
-  sub_imucal_ = hj_bf::HJSubscribe("/imu_work_model", 1,
-                                   &McuImpl::imuWorkModeCb, this);
-  sub_middleware_ = hj_bf::HJSubscribe("/to_collect", 10,
-                                   &McuImpl::mcuCtlFromMiddleCb, this);
-#ifdef X6
-  sub_x6pump_ = hj_bf::HJSubscribe("/x6_pump", 1,
-                                   &McuImpl::x6pumpCb, this);
-#endif
-  sub_mcuctl_ = hj_bf::HJSubscribe("mcuInterCtl", 1, 
-                              &McuImpl::mcuCtlCallBack, this);
-  
-  sub_rtcTimeSync_ = hj_bf::HJSubscribe("/time/updatetime", 1,
-                              &McuImpl::rtcTimeSyncCb, this);
+    sub_airbag_ = hj_bf::HJSubscribe("/air_bag", 1,
+                                    &McuImpl::airbagCb, this);
+    /*
+    sub_steerpump_ = hj_bf::HJSubscribe("/steer_pump", 1,
+                                    &McuImpl::steerPumpCb, this);
+    */
+    sub_flipcover_ = hj_bf::HJSubscribe("/flip_cover", 1,
+                                    &McuImpl::flipCoverCb, this);
+    sub_pumpsteer_ = hj_bf::HJSubscribe("/pump_steer", 1,
+                                    &McuImpl::pumpSteerCb, this);
+    sub_turbin_motor_ = hj_bf::HJSubscribe("/turbine_motor", 1,
+                                    &McuImpl::turbinMotorCb, this);
+    sub_imucal_ = hj_bf::HJSubscribe("/imu_work_model", 1,
+                                    &McuImpl::imuWorkModeCb, this);
+    sub_middleware_ = hj_bf::HJSubscribe("/to_collect", 10,
+                                    &McuImpl::mcuCtlFromMiddleCb, this);
+  #ifdef X6
+    sub_x6pump_ = hj_bf::HJSubscribe("/x6_pump", 1,
+                                    &McuImpl::x6pumpCb, this);
+  #endif
+    sub_mcuctl_ = hj_bf::HJSubscribe("mcuInterCtl", 1,
+                                &McuImpl::mcuCtlCallBack, this);
+
+    sub_rtcTimeSync_ = hj_bf::HJSubscribe("/time/updatetime", 1,
+                                &McuImpl::rtcTimeSyncCb, this);
+
+    sub_fifo_ = hj_bf::HJSubscribe("/hwtool/fifo", 1,
+                                &McuImpl::toolFifoOpenCb, this);
+
+    sub_uartctl_ = hj_bf::HJSubscribe("/hwtool/uartctl", 1,
+                                &McuImpl::uartCtlCb, this);
+
+    sub_getrtc_ = hj_bf::HJSubscribe("/factory/getRTCTime", 10,
+                                &McuImpl::getRtcCb, this);
+
+    sub_factory_module_ = hj_bf::HJSubscribe("/factory/moduleSet", 10,
+                                &McuImpl::factoryModuleCb, this);
+
+    sub_factory_airbag_ = hj_bf::HJSubscribe("/factory/airbagSet", 10,
+                                &McuImpl::factoryAirbagCb, this);
+    sub_collect_action_ = hj_bf::HJSubscribe("collect_node/notify/func", 10, &McuImpl::factoryRestroedCb, this);
+  });
+  async_sub.detach();
 
   getMcuVerTmr_ = 
-      hj_bf::HJCreateTimer("getMcuVersion", 500 * 1000, &McuImpl::getMcuVerTimerCb, this);
+      hj_bf::HJCreateTimer("getMcuVersion", 3 * 1000 * 1000, &McuImpl::getMcuVerTimerCb, this);
   getmcuLedVer_ =
       hj_bf::HJCreateTimer("getMcuLedVer", 500 * 1000, &McuImpl::getMcuLedVerTimerCb, this, false);
   rtcSyncTmr_ = 
       hj_bf::HJCreateTimer("rtcTimeSync", 500 * 1000, &McuImpl::rtcTimeSyncTimerCb, this, false);
   syncRtcWithFlagTmr_ = 
-      hj_bf::HJCreateTimer("syncRtcWithFlag", 2 * 1000 * 1000, &McuImpl::syncRtcWithFlag, this);
+      hj_bf::HJCreateTimer("syncRtcWithFlag", 1 * 1000 * 1000, &McuImpl::syncRtcWithFlag, this);
+  closePipeTmr_ =
+      hj_bf::HJCreateTimer("closeToolPipe", 10 * 1000 * 1000, &McuImpl::closePipeCb, this, false);
+  getRtcTmr_ = 
+      hj_bf::HJCreateTimer("getRtc", 100 * 1000, &McuImpl::getRtcTimerCb, this, false);
+  wokeModeAngoTmr_ = 
+      hj_bf::HJCreateTimer("ango", 2 * 1000 * 1000, &McuImpl::workModeToAngo, this);
+  getBootTypeTmr_ = 
+      hj_bf::HJCreateTimer("getBootType", 500 * 1000, &McuImpl::getBootTypeCb, this);
+  getBootTimeTmr_ = 
+      hj_bf::HJCreateTimer("getBootTime", 500 * 1000, &McuImpl::getBootTimeCb, this);
 
   isRun_ = true;
   dealUartThred_ = std::thread(&McuImpl::dealUartLoop, this);
 
-  beatMcu(); //先发送一次心跳
+  // beatMcu(); //先发送一次心跳
   heartBeat_ = hj_bf::HJCreateTimer("heartBeat", 900 * 1000,
                                     &McuImpl::heartBeatTimerCb, this);
-
+  moduleRebootTmr_ = hj_bf::HJCreateTimer("moduleRebootTmr", 500 * 1000, &McuImpl::ModuleRebootTimer, this, false);
   return true;
 }
 
@@ -918,54 +1153,75 @@ void McuImpl::initSensorCtl() {
     pumpCtl_.init(0x32, 5, uartDataHandler_, "pump_ctl");
     turnCtl_.init(0x30, 3, uartDataHandler_, "turn_ctl");
     turbinCtl_.init(0x36, 3, uartDataHandler_, "turbin_ctl");
-    powerCtl_.init(0x50, 1, uartDataHandler_, "power_ctl", false);
-    lightStripCtl_.init(0x92, 2, uartDataHandler_, "lightStrip_ctl");
+    powerCtl_.init(0x50, 2, uartDataHandler_, "power_ctl", false);
+    lightStripCtl_.init(0x92, 3, uartDataHandler_, "lightStrip_ctl");
     lightPearlCtl_.init(0x94, 8, uartDataHandler_, "lightPearl_ctl");
+    moduleRebootCtl_.init(0x96, 1, uartDataHandler_, "module_reboot_ctl", true, false);
+    lowPowerCtl_.init(0x52, 1, uartDataHandler_, "lowpower_ctl");
+    factoryModuleCtrl_.init(0x100, 1, uartDataHandler_, "factoryModuleCtrl");
+    factoryAirbagCtrl_.init(0x102, 3, uartDataHandler_, "factoryAirbagCtrl", true, false);
+    keyBlockCtl_.init(0x99, 1, uartDataHandler_, "blockkey_ctl");
 }
 
 void McuImpl::sensorCtlAck(uint32_t ackid, uint8_t* data) {
     HJ_INFO("ack id:%02x\n", ackid);
-    switch(ackid) {
+    switch (ackid) {
         case MOTOR_MSG_ACK:
             motorCtl_.ack(data);
             break;
-
         case AIRBAG_CTL_ACK:
             airbagCtl_.ack(data);
             break;
-        
         case IMU_CALI_ACK:
             imuCalCtl_.ack(data);
             break;
-
-        case FLIP_COVER_ACK:
-            flipCtl_.ack(data);
+        case FLIP_COVER_ACK: {
+            int16_t dst = *(int16_t*)data;
+            HJ_INFO("dst=%d\n", dst);
+            if (*(data+2) == 0) {
+                flipCtl_.ack(data);
+            } else {
+                pubFlipCoverAck(*(int16_t*)data, *(uint8_t*)(data+2));
+            }
+        }
             break;
-        
         case PUMP_MSG_ACK:
             pumpCtl_.ack(data);
             break;
-        
         case TURN_MOTOR_ACK:
             turnCtl_.ack(data);
             break;
-        
         case TURBIN_CTL_ACK:
             turbinCtl_.ack(data);
             break;
-        
         case MCU_RESET_ACK:
             powerCtl_.ack(data);
+            if (factory_restored_falg_) {
+              pubFactoryRestoredAck();
+              factory_restored_falg_ = false;
+            }
             break;
-        
         case LIGHT_STRIP_ACK:
             lightStripCtl_.ack(data);
             break;
-        
         case LIGHT_PEARL_ACK:
             lightPearlCtl_.ack(data);
             break;
-        
+        case MODULE_REBOOT_ACK:
+            moduleRebootCtl_.ack(data);
+            break;
+        case LOWPOWER_CTL_ACK:
+            lowPowerCtl_.ack(data);
+            break;
+        case FACTORYMODULEACK:
+            factoryModuleCtrl_.ack(data);
+            break;
+        case FACTORYAIRBAGCTRLACK:
+            factoryAirbagCtrl_.ack(data);
+            break;
+        case BLOCK_KEY_ACK:
+            keyBlockCtl_.ack(data);
+            break;
         default:
             HJ_ERROR("unknown mcu ack:%02x\n", ackid);
     }
@@ -975,6 +1231,7 @@ void McuImpl::mcuCtlCallBack(const std_msgs::Bool::ConstPtr& msg) {
   //true:打开串口读， false:关闭串口读
   if (msg->data == 0) {
     isRun_ = false;
+    uartDataHandler_->writeCtl(false);
     if(dealUartThred_.joinable()) {
       dealUartThred_.join();
     }
@@ -985,6 +1242,7 @@ void McuImpl::mcuCtlCallBack(const std_msgs::Bool::ConstPtr& msg) {
     mcuota_pub_.publish(msg);
   } else {
     isRun_ = true;
+    uartDataHandler_->writeCtl(true);
     dealUartThred_ = std::thread(&McuImpl::dealUartLoop, this);
   }
 }
@@ -1004,7 +1262,7 @@ void McuImpl::motorPub(const hj_interface::Encoder &msg) {
 void McuImpl::imuPub(const hj_interface::Imu &msg) {
   imu_pub_.publish(msg);
 }
-#ifdef DEBUG
+#ifdef MSG_DEBUG
 void McuImpl::motorTimePub(const hj_interface::Atime &msg) {
   motor_time_pub_.publish(msg);
 }
@@ -1052,10 +1310,10 @@ void McuImpl::onChargerPub(uint8_t state) {
   //HJ_INFO("on charger pub:%d\n", state);
 }
 
-void McuImpl::pubFirstImuTime(uint32_t ts) {
+void McuImpl::pubBootTime(uint32_t ts) {
   std_msgs::UInt32 pubmsg;
   pubmsg.data = ts;
-  first_imu_pub_.publish(pubmsg);
+  boot_time_pub_.publish(pubmsg);
 }
 
 void McuImpl::pubTimeDiff(double diff_time) {
@@ -1083,10 +1341,11 @@ void McuImpl::stationUltraPub(Station_Ultra_msg* msg) {
   station_ultra_pub_.publish(pubdata);
 }
 
-void McuImpl::outwaterPub(uint8_t value) {
-  std_msgs::UInt8 pubmsg;
-  pubmsg.data = value;
-  outof_water_pub_.publish(pubmsg);
+void McuImpl::outwaterPub(const std_msgs::UInt8MultiArray& pubmsg) {
+  std_msgs::UInt8 pubcap;
+  pubcap.data = pubmsg.data.at(0);
+  outof_water_pub_.publish(pubcap);
+  outwater_hall_pub_.publish(pubmsg);
 }
 
 void McuImpl::pubKeyCtlToMid(uint8_t flag, uint8_t value) {
@@ -1156,6 +1415,46 @@ void McuImpl::pubDirtBoxToMid(uint8_t state) {
   //HJ_INFO("pub result:%s\n", msg.data.c_str());
 }
 
+void McuImpl::pubAngoReqToMid(uint32_t flag, uint32_t data) {
+  rapidjson::Document document;
+  document.SetObject();
+
+  rapidjson::Value angoReq(rapidjson::kObjectType);
+  angoReq.AddMember("type", flag, document.GetAllocator());
+  angoReq.AddMember("data", data, document.GetAllocator());
+  
+  document.AddMember("anGeReq", angoReq, document.GetAllocator());
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+  document.Accept(writer); 
+
+  std_msgs::String msg;
+  msg.data = std::string(buffer.GetString());
+  to_middleware_pub_.publish(msg);
+}
+
+void McuImpl::bootTypePub(uint8_t type, uint8_t angoflag, uint8_t angodata) {
+    hj_interface::BootType bootmsg;
+    bootmsg.type = type;
+    if (angoflag != 255 && angodata != 255) {
+        rapidjson::Document document;
+        document.SetObject();
+
+        rapidjson::Value angoReq(rapidjson::kObjectType);
+        angoReq.AddMember("type", angoflag, document.GetAllocator());
+        angoReq.AddMember("data", angodata, document.GetAllocator());
+        
+        document.AddMember("anGeReq", angoReq, document.GetAllocator());
+        rapidjson::StringBuffer buffer;
+        rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+        document.Accept(writer); 
+        bootmsg.ango = std::string(buffer.GetString());
+    }
+    
+    HJ_INFO("publish boot :%d  %s\n", bootmsg.type, bootmsg.ango.c_str());
+    bootType_pub_.publish(bootmsg);
+}
+
 void McuImpl::mototCurPub(const hj_interface::ElecMotorCur& msg) {
   motot_cur_pub_.publish(msg);
 }
@@ -1175,6 +1474,66 @@ void McuImpl::pubFanMotorSpeed(uint16_t speed) {
     fan_motor_speed_pub_.publish(msg);
 }
 
+void McuImpl::sensorTempPub(const hj_interface::SensorTemp& msg) {
+    sensorTemp_pub_.publish(msg);
+}
+
+void McuImpl::pubTurnMotorHall(const std_msgs::UInt8 msg) {
+  turn_motor_hall_pub_.publish(msg);
+}
+
+void McuImpl::pubWirelessCharging(const Wireless_Charging_msg* msg) {
+  hj_interface::WirelessCharging pubdata;
+  pubdata.bridge_circuit_vol = msg->bridge_circuit_vol;
+  pubdata.charger_ch_vol = msg->charger_ch_vol;
+  pubdata.bridge_circuit_cur = msg->bridge_circuit_cur;
+  pubdata.charger_ch_cur = msg->charger_ch_cur;
+  pubdata.bridge_circuit_temp = msg->bridge_circuit_temp;
+  pubdata.coil_temp = msg->coil_temp;
+  pubdata.charging_cradle_vol = msg->charging_cradle_vol;
+  pubdata.charging_cradle_cur = msg->charging_cradle_cur;
+  pubdata.charging_cradle_temp = msg->charging_cradle_temp;
+  pubdata.charging_cradle_status = msg->charging_cradle_status;
+  wireless_charging_pub_.publish(pubdata);
+}
+
+void McuImpl::airBagStatusPub(uint8_t state, uint16_t left) {
+    hj_interface::AirBagStatus status;
+    status.status = state;
+    status.left = left;
+    airbag_status_pub_.publish(status);
+}
+
+void McuImpl::airBagStatus2Pub(uint8_t state, uint16_t left) {
+    hj_interface::AirBagStatus status;
+    status.status = state;
+    status.left = left;
+    airbag_status2_pub_.publish(status);
+}
+
+void McuImpl::pubImpellerSpeed(uint16_t speed) {
+    std_msgs::UInt16 msg;
+    msg.data = speed;
+    impeller_speed_pub_.publish(msg);
+}
+
+void McuImpl::pubFlipCoverAck(int16_t dstpos, uint8_t rst) {
+    hj_interface::FlipCoverAck ack;
+    ack.dstpos = dstpos;
+    ack.rst = rst;
+    HJ_INFO("flip ack pub: %d , %d\n", dstpos, rst);
+    flipcover_ack_pub_.publish(ack);
+}
+
+void McuImpl::pubFactoryRestoredAck() {
+  HJ_INFO("pub factory restored ack");
+  hj_interface::CollectBroadcast msg;
+  msg.action = hj_interface::CollectBroadcast::SYS_ACTION_RESTORE_FACTORY;
+  msg.function = 3;  //FuncMcu
+  msg.ack = 0;
+  pub_func_response_.publish(msg);
+}
+
 void McuImpl::setHealthError(uint32_t code, uint8_t status) {
     hj_interface::HealthCheckCode srv_msg;
 
@@ -1183,6 +1542,28 @@ void McuImpl::setHealthError(uint32_t code, uint8_t status) {
     hj_bf::HjPushSrv(srv_msg);
 }
 
+// 错误码ack
+void McuImpl::setHealthCheckAck(const std::vector<uint16_t>& code_list, uint8_t size) {
+  uint16_t buf_size = size * 2 + 9;
+  std::vector<uint8_t> health_check_ack;
+  health_check_ack.assign(buf_size, 0xff);
+  health_check_ack[0] = 0xA1;  // ID
+  health_check_ack[1] = 0x0;
+  health_check_ack[2] = 0x0;
+  health_check_ack[3] = 0x0;
+  for (auto i = 0; i < size; i++) {  // data
+    health_check_ack[4 + i * 2] = static_cast<uint8_t>(code_list[i] & 0xff);
+    health_check_ack[5 + i * 2] = static_cast<uint8_t>((code_list[i] >> 8) & 0xff);
+  }
+  uint8_t len[2] = {0xff, 0xff}; 
+  UINT16_TO_BUF_LITTLE(size * 2, len);  // 字节数
+  health_check_ack[4 + size * 2] = len[0];
+  health_check_ack[5 + size * 2] = len[1];
+  
+  uartDataHandler_->writePackage2Uart(health_check_ack.data(), buf_size);
+}
+
+// 自检完成ack
 void McuImpl::selfHealthCheckAck(health_type type) {
     switch (type) {
         case MOTOR:
@@ -1221,12 +1602,66 @@ void McuImpl::selfHealthCheckAck(health_type type) {
         imu_health_ack_ == 1 &&
         bms_health_ack_ == 1 &&
         lora_health_ack_ == 1) {
-        
         hj_interface::HealthCheckCode srv_msg;
         srv_msg.request.code_val = 2999;  // 自检完成标志
         srv_msg.request.status = 0;
         hj_bf::HjPushSrv(srv_msg);
     }
+}
+
+void McuImpl::pubMcuSensorStatus(const McuSensorStatus_msg* msg) {
+#if HJ_T1pro
+  HJ_INFO("pub mcu sensor status, msg.outwater_status: %d, msg.outwater_hall_status: %d, "
+          "msg.outwater_hall_status: %d, msg.dirtybox_hall_status:%d, "
+          "msg.ango_status:%d, msg.left_ray_status:%d, msg.right_ray_status:%d\n",
+          msg->outwater_status, msg->outwater_hall_status, msg->outwater_hall_status2, msg->dirtybox_hall_status,
+          msg->ango_status, msg->left_ray_status, msg->right_ray_status);
+
+  hj_interface::McuSensorStatusT1 pubdata;
+  pubdata.outwater_status = msg->outwater_status;
+  pubdata.outwater_hall_status = msg->outwater_hall_status;
+  pubdata.outwater_hall_status2 = msg->outwater_hall_status2;
+  pubdata.dirtybox_hall_status = msg->dirtybox_hall_status;
+  pubdata.ango_status = msg->ango_status;
+  pubdata.left_ray_status = msg->left_ray_status;
+  pubdata.right_ray_status = msg->right_ray_status;
+  mcu_sensor_status_pub_.publish(pubdata);
+#else
+  HJ_INFO("pub mcu sensor status, msg.outwater_status: %d, msg.recharge_hall_status: %d, "
+          "msg.dirtybox_hall_status:%d, msg.turn_motor_hall_status:%d, "
+          "msg.dtof_status:%d, msg.ango_status:%d\n",
+          msg->outwater_status, msg->recharge_hall_status, msg->dirtybox_hall_status,
+          msg->turn_motor_hall_status, msg->dtof_status, msg->ango_status);
+
+  hj_interface::McuSensorStatus pubdata;
+  pubdata.outwater_status = msg->outwater_status;
+  pubdata.recharge_hall_status = msg->recharge_hall_status;
+  pubdata.dirtybox_hall_status = msg->dirtybox_hall_status;
+  pubdata.turn_motor_hall_status = msg->turn_motor_hall_status;
+  pubdata.dtof_status = msg->dtof_status;
+  pubdata.ango_status = msg->ango_status;
+  mcu_sensor_status_pub_.publish(pubdata);
+#endif
+}
+
+void McuImpl::recordCheck(const std::string& name, uint8_t status) {
+  std::ofstream check_file_("/tmp/mcuCheck.json", std::ios::out | std::ios::trunc);
+  if (!check_file_.is_open()) {
+    HJ_ERROR("open check file fail\n");
+    return;
+  }
+
+  rapidjson::Document d;
+  rapidjson::Document::AllocatorType& allocator = d.GetAllocator();
+  d.SetObject();
+  d.AddMember("lora_status", status, allocator);
+
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+  d.Accept(writer);
+  std::string json_str = buffer.GetString();
+  check_file_ << json_str;
+  check_file_.close();
 }
 
 void McuImpl::stopGetVerTimer() {
@@ -1239,6 +1674,35 @@ void McuImpl::startMcuTimeSync() {
 
 void McuImpl::stopMcuTimeSync() {
     rtcSyncTmr_.stop();
+}
+
+void McuImpl::startGetRtcTimer() {
+    getRtcTmr_.start();
+}
+
+void McuImpl::stopGetRtcTimer() {
+    getRtcTmr_.stop();
+}
+
+void McuImpl::stopGetBootTimer() {
+    getBootTypeTmr_.stop();
+}
+
+void McuImpl::stopGetBootTimeTimer() {
+    getBootTimeTmr_.stop();
+}
+
+void McuImpl::rtcPub(const std::string& data) {
+    std_msgs::String pub;
+    pub.data = data;
+    HJ_INFO("pub rtc : [%s]\n", pub.data.c_str());
+    rtc_pub_.publish(pub);
+}
+
+void McuImpl::closePipeCb(const hj_bf::HJTimerEvent&) {
+    HJ_INFO("close pipe\n");
+    uartDataHandler_->setWritePipe(false, NULL);
+    closePipeTmr_.stop();
 }
 
 void McuImpl::writePubMcuVersion(Mcu_Ver_msg* msg) {
@@ -1377,6 +1841,42 @@ void McuImpl::rtcTimeSyncTimerCb(const hj_bf::HJTimerEvent&) {
     uartDataHandler_->writePackage2Uart(rtc_set, sizeof(rtc_set));
 }
 
+void McuImpl::getRtcTimerCb(const hj_bf::HJTimerEvent&) {
+    static uint8_t rtc_get[] = {0x72, 0x0, 0x0, 0x0,  
+                                0x00,
+                                0x01, 0x0, 
+                                0xff, 0xff, 0xff};
+
+    uartDataHandler_->writePackage2Uart(rtc_get, sizeof(rtc_get));
+}
+
+void McuImpl::workModeToAngo(const hj_bf::HJTimerEvent&) {
+    static uint8_t toAngo[] = {0xA7, 0x0, 0x0, 0x0,
+                                0x00, 0x00, 0x00,
+                                0x03, 0x00,
+                                0xff, 0xff, 0xff};
+    toAngo[4] = toAngoState_.workmode;
+    toAngo[5] = toAngoState_.intensity;
+    toAngo[6] = toAngoState_.error;
+    uartDataHandler_->writePackage2Uart(toAngo, sizeof(toAngo));
+}
+
+void McuImpl::getBootTypeCb(const hj_bf::HJTimerEvent&) {
+    static uint8_t getBoot[] = {0x54, 0x0, 0x0, 0x0,
+                                0x00,
+                                0x01, 0x00,
+                                0xff, 0xff, 0xff};
+    uartDataHandler_->writePackage2Uart(getBoot, sizeof(getBoot));
+}
+
+void McuImpl::getBootTimeCb(const hj_bf::HJTimerEvent&) {
+    static uint8_t getBootTime[] = {0x76, 0x0, 0x0, 0x0,
+                                0x00,
+                                0x01, 0x00,
+                                0xff, 0xff, 0xff};
+    uartDataHandler_->writePackage2Uart(getBootTime, sizeof(getBootTime));
+}
+
 void McuImpl::syncRtcWithFlag(const hj_bf::HJTimerEvent&) {
     static int cnt = 0;
     if (cnt >= 150) { //3 min
@@ -1389,6 +1889,7 @@ void McuImpl::syncRtcWithFlag(const hj_bf::HJTimerEvent&) {
     if (boost::filesystem::exists(file)) {
         //Network has sync time before, sync rtc
         HJ_INFO("need rtc time sync!\n");
+        time_sync_flag_.store(true);
         syncRtcWithFlagTmr_.stop();
         this->startMcuTimeSync();
     } else {
@@ -1451,6 +1952,7 @@ void McuImpl::pumpSteerCb(const hj_interface::PumpAndSteer::ConstPtr& msg)
     pumpCtl_.pushData(pump_two);  
   }
 
+#ifndef HJ_T1pro
   uint8_t turn_motor_status = msg->turn_motor_ctl;
   if (turn_motor_status != 255) {
     int16_t turn_angle = msg->turn_motor;
@@ -1459,6 +1961,7 @@ void McuImpl::pumpSteerCb(const hj_interface::PumpAndSteer::ConstPtr& msg)
 
     turnCtl_.pushData(turn_motor_one);
   }
+#endif
 }
 
 void McuImpl::turbinMotorCb(const hj_interface::TurbineMotor::ConstPtr& msg) {
@@ -1526,8 +2029,22 @@ void McuImpl::mcuCtlFromMiddleCb(const std_msgs::String::ConstPtr& msg) {
   } else if (document.HasMember("lightPearl") && document["lightPearl"].IsArray()) {
     const rapidjson::Value& light = document["lightPearl"].GetArray();
     dealLightPearlJsonFromMid(light);
+  } else if (document.HasMember("moduleReboot") && document["moduleReboot"].IsObject()) {
+    // 通知mcu对模组断电重启
+    HJ_INFO("module reboot\n");
+    const rapidjson::Value& json = document["moduleReboot"].GetObject();
+    dealModuleRebootJsonFromMid(json);
+    moduleRebootTmr_.start();
+  } else if (document.HasMember("anGeRecv") && document["anGeRecv"].IsObject()) {
+    const rapidjson::Value& json = document["anGeRecv"].GetObject();
+    dealAngoJsonFromMid(json);
+  } else if (document.HasMember("lowPowerCtl") && document["lowPowerCtl"].IsObject()) {
+    const rapidjson::Value& json = document["lowPowerCtl"].GetObject();
+    dealLowPowerFromMid(json);
+  } else if (document.HasMember("enableKey") && document["enableKey"].IsObject()) {
+    const rapidjson::Value& json = document["enableKey"].GetObject();
+    dealBlockKeyFronMid(json);
   }
-
 }
 
 void McuImpl::dealButtonCmdJsonFromMid(const rapidjson::Value& buttonjson) {
@@ -1580,7 +2097,14 @@ void McuImpl::dealButtonCmdJsonFromMid(const rapidjson::Value& buttonjson) {
 
     case 2:
       {
+        uint8_t offtype = 0;
         button_power_cmd[0] = 1;
+        if (buttonjson.HasMember("type")) {
+            offtype = buttonjson["type"].GetUint();
+            button_power_cmd[1] = offtype;
+        }
+        HJ_INFO("sync file shoutdown");
+        sync();  // 收到MCU休眠消息，立即同步文件，保证数据安全
         powerCtl_.pushData(button_power_cmd);
       }
     break;
@@ -1592,7 +2116,7 @@ void McuImpl::dealButtonCmdJsonFromMid(const rapidjson::Value& buttonjson) {
       }
     break;
 
-    case 4:
+    case 4:  // TODO(wuhao): middleware未走此链路
       {
         button_power_cmd[0] = 3;
         powerCtl_.pushData(button_power_cmd);
@@ -1689,12 +2213,18 @@ void McuImpl::dealLightCtlJsonFromMid(const rapidjson::Value& lightCtlJson) {
         
         uint8_t status = 0;
         uint8_t color = 0;
+        uint8_t bright = 255;
         status = lightCtlJson["status"].GetInt();
         color = lightCtlJson["color"].GetInt();
 
+        if (lightCtlJson.HasMember("bright") && lightCtlJson["bright"].IsInt()) {
+            bright = lightCtlJson["bright"].GetInt();
+        }
+
         light[0] = status;
         light[1] = color;
-        
+        light[2] = bright;
+
         lightStripCtl_.pushData(light);
         //uartDataHandler_->writePackage2Uart(light, sizeof(light) / sizeof(uint8_t));
     }
@@ -1721,9 +2251,105 @@ void McuImpl::dealLightPearlJsonFromMid(const rapidjson::Value& lightCtlJson) {
     lightPearlCtl_.pushData(lightpearl);
 }
 
+void McuImpl::dealModuleRebootJsonFromMid(const rapidjson::Value& json) {
+  static std::vector<uint8_t> module_reboot(moduleRebootCtl_.dataLen(), 0xff);
+  mcu_module_reboot_ack_.store(false);
+  if ((json.HasMember("type") && json["type"].IsInt())) {
+    uint8_t type = json["type"].GetInt();
+
+    module_reboot[0] = type;
+    moduleRebootCtl_.pushData(module_reboot);
+  }
+}
+
+void McuImpl::dealAngoJsonFromMid(const rapidjson::Value& json) {
+    if (!json.HasMember("type")) {
+        return;
+    }
+
+    int type = json["type"].GetInt();
+    if (type == 1) {
+        if (!json.HasMember("task") || !json.HasMember("cleanMode")) {
+            return;
+        }
+        toAngoState_.workmode = json["task"].GetUint();
+        toAngoState_.intensity = json["cleanMode"].GetUint();
+    } else if (type == 2) {
+        if (!json.HasMember("data")) {
+            return;
+        }
+        toAngoState_.error = json["data"].GetUint();
+    }
+
+    HJ_INFO("robot state:%d %d %d\n", toAngoState_.workmode, toAngoState_.intensity, toAngoState_.error);
+}
+
+void McuImpl::dealLowPowerFromMid(const rapidjson::Value& json) {
+    if (!json.HasMember("state")) {
+        return;
+    }
+
+    uint8_t state = json["state"].GetUint();
+    static std::vector<uint8_t> lowpower(lowPowerCtl_.dataLen(), 0xff);
+    lowpower[0] = state;
+    
+    if (standby_mode_) {
+      lowPowerCtl_.pushData(lowpower);
+      bool res = false;
+      if (state == kLowPowerCtlTypeStandby) {
+        int reboot_flag = 1;
+        bool ret = modulePowerManage(false);
+        if (ret) {
+          res = hj_bf::setVariable("module_restart_flag", reboot_flag);
+        }
+        HJ_INFO("Standby mode, module restart flag:%d, ret:%d, res:%d\n", reboot_flag, ret, res);
+      } else {
+        int reboot_flag = 0;
+        bool ret = modulePowerManage(true);
+        if (ret) {
+          res = hj_bf::setVariable("module_restart_flag", reboot_flag);
+        }
+        HJ_INFO("exit Standby mode, module restart flag:%d, ret:%d, res:%d\n", reboot_flag, ret, res);
+      }
+    } else {
+      if (state != kLowPowerCtlTypeStandby) {
+        lowPowerCtl_.pushData(lowpower);
+      }
+    }
+    if (state == kLowPowerCtlTypeSleep) {
+      HJ_INFO("sync file kLowPowerCtlTypeSleep");
+      sync();  //收到Middleware的低电压控制消息，立即同步文件，保证数据安全
+    }
+}
+
+void McuImpl::dealBlockKeyFronMid(const rapidjson::Value& json) {
+    if (!json.HasMember("enable")) {
+        return;
+    }
+
+    uint8_t enable = json["enable"].GetUint();
+    static std::vector<uint8_t> data(keyBlockCtl_.dataLen(), 0xff);
+    data[0] = enable;
+    keyBlockCtl_.pushData(data);
+}
+
+void McuImpl::PubModuleRebootResult(uint8_t result) {
+  mcu_module_reboot_ack_.store(true);
+  mcu_module_reboot_result_.store(result);
+}
+
 void McuImpl::rtcTimeSyncCb(const std_msgs::String::ConstPtr& msg) {
+    time_sync_flag_.store(true);
     HJ_INFO("rtc time sync trigger:%s\n", msg->data.c_str());
     this->startMcuTimeSync();
+}
+
+bool McuImpl::GetTimeSyncFlag() {
+  return time_sync_flag_.load();
+}
+
+void McuImpl::SetTimeSyncFlag(bool flag) {
+  time_sync_flag_.store(flag);
 }
 
 /*上游算法的控制*/
@@ -1738,14 +2364,161 @@ void McuImpl::motor_set_chatterCallback(const hj_interface::Nav::ConstPtr &msg) 
   motorCtl_.pushData(motor);
 }
 
+void McuImpl::toolFifoOpenCb(const std_msgs::String::ConstPtr& msg) {
+  HJ_INFO("receive fifo control: %s\n", msg->data.c_str());
+  rapidjson::Document doc;
+  if (doc.Parse(msg->data.data()).HasParseError()) {
+    return;
+  }
+
+  std::string fifo = doc["pipefile"].GetString();
+  int time = doc["time"].GetInt();
+  
+  uartDataHandler_->setWritePipe(true, fifo.data());
+  closePipeTmr_.setPeriod(time * 1000 * 1000);
+  closePipeTmr_.start();
+}
+
+void McuImpl::uartCtlCb(const std_msgs::UInt8MultiArray::ConstPtr& msg) {
+    auto data = msg->data;
+    if (data.size() >= sizeof(uint32_t)) {
+        uint32_t id = *reinterpret_cast<const uint32_t*>(data.data());
+        HJ_INFO("tool mcu ctl id : %08x\n", id);
+    } else {
+        HJ_ERROR("not uint32_t id\n");
+        return;
+    }
+    uartDataHandler_->writePackage2Uart(reinterpret_cast<uint8_t*>(data.data()), data.size());
+}
+
+void McuImpl::getRtcCb(const std_msgs::String::ConstPtr& msg) {
+    HJ_INFO("receive get rtc\n");
+    startGetRtcTimer();
+}
+
+void McuImpl::factoryModuleCb(const std_msgs::UInt8::ConstPtr& msg) {
+  HJ_INFO("receive factoryModuleCb msg:%d\n", msg->data);
+  static std::vector<uint8_t> module_set(factoryModuleCtrl_.dataLen(), 0xff);
+  module_set[0] = msg->data;
+  factoryModuleCtrl_.pushData(module_set);
+}
+
+void McuImpl::factoryAirbagCb(const hj_interface::AirBagFactoty::ConstPtr& msg) {
+  HJ_INFO("receive factoryAirbagCb airbag_ctl:%d, airbag_time:%d\n", msg->airbag_ctl, msg->airbag_time);
+  static std::vector<uint8_t> air_bag(factoryAirbagCtrl_.dataLen(), 0xff);
+  uint8_t airbag_status = msg->airbag_ctl;
+  uint16_t airbag_time = msg->airbag_time;
+
+  air_bag[0] = airbag_status;
+  memcpy(air_bag.data() + 1, &airbag_time, sizeof(uint16_t));
+  factoryAirbagCtrl_.pushData(air_bag);
+}
+
+void McuImpl::factoryRestroedCb(const hj_interface::CollectBroadcast &msg) {
+  if (msg.action == hj_interface::SysAction::SYS_ACTION_RESTORE_FACTORY ||
+      msg.action == hj_interface::SysAction::SYS_ACTION_RESET) {
+    factory_restored_falg_ = true;
+    static std::vector<uint8_t> factory_restroed_cmd(powerCtl_.dataLen(), 0xff);
+    factory_restroed_cmd[0] = 3;
+    powerCtl_.pushData(factory_restroed_cmd);
+  }
+}
+
 void McuImpl::beatMcu() {
   static uint8_t heart_buf[] = {0x01, 0x0,  0x0,  0x0,  0xff, 0xe8, 0x03,
                                 0x00, 0x00, 0x05, 0x00, 0xff, 0xff, 0xff};
   uartDataHandler_->writePackage2Uart(heart_buf, sizeof(heart_buf));
 }
 
+bool McuImpl::AllProcessIsExist() {
+  static uint8_t normal_run_flag = 0x0F;
+  for (int i = 0; i < kNodes.size(); i++) {
+    FILE *fp = nullptr;
+    char buf[50] = {'\0'};
+    int32_t pid = -1;
+    std::string cmd = "pidof " + kNodes.at(i);
+
+    if ((fp = popen(cmd.data(), "r")) != nullptr) {
+      if (fgets(buf, 50, fp) != nullptr) {
+        pid = atoi(buf);
+      }
+    }
+    pclose(fp);
+    if (pid < 0) {
+      if ((normal_run_flag & (1 << i)) !=0) {
+        HJ_ERROR("node:%s not running\n", kNodes.at(i).c_str());
+      }
+      normal_run_flag &= ~(1 << i);
+    } else {
+      normal_run_flag |= (1 << i);
+    }
+  }
+  if (normal_run_flag != 0x0F) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
 void McuImpl::heartBeatTimerCb(const hj_bf::HJTimerEvent &) {
+  if (!AllProcessIsExist()) {
+    return;  // 节点没起来，不发送心跳包
+  }
+  
   beatMcu();
+}
+
+bool McuImpl::modulePowerManage(bool is_power_on) {
+  FILE *file = fopen("/sys/rk8xx/rk8xx_dbg", "w");
+  if (file == NULL) {
+    perror("Error opening file");
+    return false;
+  }
+
+  if (is_power_on) {
+    HJ_INFO("power on\n");
+    // 将数据写入文件
+    if (fprintf(file, "w 0xb4 0xff\n") < 0) {
+      perror("Error writing to file");
+      fclose(file);
+      return false;
+    }
+  } else {
+    HJ_INFO("power off\n");
+    if (fprintf(file, "w 0xb4 0xf3\n") < 0) {
+      perror("Error writing to file");
+      fclose(file);
+      return false;
+    }
+  }
+  fclose(file);
+  return true;
+}
+
+void McuImpl::ModuleRebootTimer(const hj_bf::HJTimerEvent&) {
+  static bool first_reboot  = true;
+  if (first_reboot) {
+    first_reboot = false;
+    int reboot_flag = 1;
+    bool res = hj_bf::setVariable("module_restart_flag", reboot_flag);  // soc sensor module reboot start
+    bool ret = modulePowerManage(false);
+    usleep(300000);  // 延时300ms
+    bool ret1 = modulePowerManage(true);
+    reboot_flag = 0;
+    res &= hj_bf::setVariable("module_restart_flag", reboot_flag);  // soc sensor module reboot end
+    HJ_INFO("res:%d, ret:%d, ret1:%d\n", res, ret, ret1);
+  }
+  if (mcu_module_reboot_ack_.load()) {  // 收到mcu模块重启响应大概需要1.2s
+    uint8_t result = mcu_module_reboot_result_.load();
+    result += 1;  // mcu返回值0成功，1失败。 middle:1成功，2失败
+    std::string result_str =  R"({"moduleReboot": {"type": )" + std::to_string(result) + R"(}})";
+    std_msgs::String result_msg;
+    result_msg.data = result_str;
+    to_middleware_pub_.publish(result_msg);
+    HJ_INFO("module reboot result:%s\n", result_str.c_str());
+    moduleRebootTmr_.stop();
+    first_reboot = true;
+  }
 }
 
 Mcu::~Mcu() {
@@ -1766,6 +2539,10 @@ Mcu::Mcu(const rapidjson::Value &json_conf)
   if (json_conf.HasMember("machine_version") && json_conf["machine_version"].IsString()) {
     g_machine_version = json_conf["machine_version"].GetString();
   }
+  uint8_t standby_mode = 1;
+  if (json_conf.HasMember("standby_mode") && json_conf["standby_mode"].IsInt()) {
+    standby_mode = json_conf["standby_mode"].GetInt();
+  }
 
   if (json_conf.HasMember("mcu_para") && json_conf["mcu_para"].IsObject()) {
     auto mcupara = json_conf["mcu_para"].GetObject();
@@ -1779,10 +2556,12 @@ Mcu::Mcu(const rapidjson::Value &json_conf)
     mcuImpl_ = new McuImpl(port);
 
     assert(mcuImpl_);
+    mcuImpl_->setStandbyMode(standby_mode);
     /*TODO:run失败后需要有重启机制*/
     mcuImpl_->run(baud, flow_ctrl, databits, stopbits, parity[0], keylog);
   } else {
     mcuImpl_ = new McuImpl("/dev/ttyS4");
+    mcuImpl_->setStandbyMode(standby_mode);
     assert(mcuImpl_);
     /*TODO:run失败后需要有重启机制*/
     mcuImpl_->run(460800, 0, 8, 1, 'N', keylog);

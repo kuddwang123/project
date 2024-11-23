@@ -14,7 +14,8 @@ public:
     explicit Reporter(uint32_t queueSize, uint32_t loadInterval);
     void start();
     void stop();
-
+    void reset();
+    
 private:
     bool quit_;
     uint32_t loadIntervalSec_;
@@ -33,7 +34,8 @@ private:
     hj_bf::HJTimer loadFailTmr_;
 
 private:
-    void pubToGetUrl(const std::string& uuid, uint8_t type, const std::string& filename);
+    void pubToGetUrl(const std::string& uuid, uint8_t type, 
+        const std::string& filename, uint64_t logid = 0);
     void failQueueGetUrl();
     void runInThread();
     void loadFailTimerCb(const hj_bf::HJTimerEvent &);
@@ -47,6 +49,7 @@ private:
     //void reportFileUploadRst(const std::string& filename, uint8_t type, bool result);
     std::vector<FileMsgPtr> readAllMessages();
     void reportCleanResult(const FileMsgPtr& msg);
+    void checkCachedFile();
 };
 
 } //namespace collect_node_posttunnel

@@ -111,7 +111,7 @@ bool Poll::deleteSocket(int fd)
     auto it = std::find_if(sockVec_.begin(), sockVec_.end(), [&](const std::shared_ptr<socketInfo>& item) {
         return fd == item->_fd; 
     });
-    lock.unlock();
+    //lock.unlock();
     
     if (it == sockVec_.end()) {
         HJ_INFO("socket delete: [%d] not exist\n", fd);

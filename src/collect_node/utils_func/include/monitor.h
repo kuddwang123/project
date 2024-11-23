@@ -45,17 +45,18 @@ class Monitor {
   pid_t GetProcessPidByName(const std::string& proc_name);
   void TaskCallBack(const std_msgs::UInt8::ConstPtr& msg);
   void CalCpuMemeory();
+  void UploadCoredump(const hj_bf::HJTimerEvent &);
  private:
-  uint8_t task_{0};
+  std::atomic<uint8_t> task_{0};
   int32_t collect_node_pid_{-1};
   int32_t slam_node_pid_{-1};
   int32_t planning_node_pid_{-1};
   int32_t middleware_node_pid_{-1};
   int32_t utils_node_pid_{-1};
   hj_bf::HJSubscriber task_sub_;
-  std::mutex temp_mutex_;
   std::condition_variable cv_;
   std::string fw_version_{"1.0.0"};
+  hj_bf::HJTimer coredump_upload_timer_;
 };
 }  // namespace collect_node_utils_func
 

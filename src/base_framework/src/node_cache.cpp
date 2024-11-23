@@ -3,12 +3,7 @@
 #include <iostream>
 #include <thread>
 #include "node_cache.h"
-#include "hj_interface/HealthCheckCode.h"
-#include "hj_interface/BigdataUpload.h"
 #include "log.h"
-#include "status_code.h"
-#include <fstream>
-#include "rapidjson/document.h"
 
 
 namespace hj_bf {
@@ -16,57 +11,23 @@ namespace hj_bf {
   std::mutex temp_mutex_;
   std::condition_variable cv_;
   DequeCache* g_cache = nullptr;
-  static hj_bf::HJServer service_;
-  static hj_bf::HJPublisher sg_big_data_pub;
 
-static std::string GetVersion() {
-  static std::string fw_version = "";
-  if (!fw_version.empty()) {
-    return fw_version;
-  }
-  std::ifstream stream1("/etc/version");  // 输入流
-  rapidjson::Document document;
-  std::string jsonString((std::istreambuf_iterator<char>(stream1)),
-                  std::istreambuf_iterator<char>());
+/**
+ * 节点线程函数，用于srv send
+*/
+void HjSendSrv();
 
-  if (!document.Parse(jsonString.data()).HasParseError()) {
-    if (document.HasMember("fw_ver") && document["fw_ver"].IsString()) {
-      fw_version = document["fw_ver"].GetString();
-    }
-  }
-  return fw_version;
-}
+/**
+ * set cache成员变量client_
+*/
+void HjSetClient(const hj_bf::HJClient& client);
 
 void HjPushSrv(const hj_interface::HealthCheckCode& srv) {
-  hj_bf::HjPushHealthCode(srv);
-#ifdef BIGDATA_UPLOAD
-  if (srv.request.code_val == status_code::COLLECT_NODE_MAX ||
-      srv.request.code_val == status_code::SLAM_INIT_DONE ||
-      srv.request.code_val == status_code::PLANING_NODE_MAX ||
-      srv.request.code_val == status_code::MCU_SELF_CHECK_DONE) {
-    return;
-  }
-  uint32_t error_code = srv.request.code_val;
-  uint8_t status = srv.request.status;
-  double timestamp = ros::Time::now().toSec();
-  int64_t timestamp_ms = static_cast<int64_t>(timestamp * 1000);
-  std::string fw_version = GetVersion();
-  std::string str = R"({"event": "errorEvent", "errorCode":)" +
-      std::to_string(error_code)+ R"(, "status": )" + std::to_string(status) +
-      R"(, "time": )" +  std::to_string(timestamp_ms) +  R"(, "fwVersion": ")" + fw_version + R"("})";
-  hj_interface::BigdataUpload msg;
-  msg.payload = str;
-  msg.type = hj_interface::BigdataUpload::kBigdataImmediate;
-  sg_big_data_pub.publish(msg);
-#endif
+  g_cache->push(srv);
 }
 
 void HjSendSrv() {
   g_cache->send_msg();
-}
-
-void HjPushHealthCode(const hj_interface::HealthCheckCode& srv) {
-  g_cache->push(srv);
 }
 
 void HealthCheckInit() {
@@ -74,7 +35,6 @@ void HealthCheckInit() {
   assert(g_cache);
   hj_bf::HJClient client = hj_bf::HJCreateClient<hj_interface::HealthCheckCode>(HJ_HEALTH_MONITOR);
   hj_bf::HjSetClient(client);
-  sg_big_data_pub = hj_bf::HJAdvertise<hj_interface::BigdataUpload>("/big_data_cmd", 10);
   auto state = std::thread(&hj_bf::HjSendSrv);  // 开线程
   state.detach();
 }
@@ -83,8 +43,12 @@ void HjSetClient(const hj_bf::HJClient& client) {
   g_cache->setClient(client);
 }
 
+void HjSetService() {
+  g_cache->setService();
+}
+
 void registerServerCallback(const srvCallBack& callback) {
-  service_ = hj_bf::HJCreateServer(HJ_HEALTH_MONITOR, callback);
+  g_cache->callbacks_.push_back(callback);
 }
 
 void DequeCache::createInstance(uint32_t max_size) {
@@ -129,6 +93,19 @@ void DequeCache::pop() {
 
 void DequeCache::setClient(const hj_bf::HJClient& client) {
   client_ = client;
+}
+
+void DequeCache::setService() {
+  service_ = hj_bf::HJCreateServer(HJ_HEALTH_MONITOR, &DequeCache::server_callback, this);
+}
+
+bool DequeCache::server_callback(hj_interface::HealthCheckCodeRequest& req,
+                       hj_interface::HealthCheckCodeResponse& res) {
+  for (auto& callback : callbacks_) {
+    callback(req, res);
+  }
+  res.result = 1;
+  return true;
 }
 
 void DequeCache::send_msg() {

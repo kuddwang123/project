@@ -5,11 +5,16 @@ from ._AppData import *
 from ._AppMsg import *
 from ._AppOnlineType import *
 from ._Bat import *
+from ._BigDataSave import *
 from ._Chat import *
 from ._CleanArea import *
 from ._CleanAreas import *
+from ._CleanRecord import *
 from ._Depth import *
 from ._DockSignal import *
+from ._DownLeft import *
+from ._DownRay import *
+from ._DownRight import *
 from ._ElecMotorCur import *
 from ._Encoder import *
 from ._Fall import *
@@ -20,6 +25,9 @@ from ._Imu import *
 from ._ImuWorkModel import *
 from ._IotReturn import *
 from ._Kbd import *
+from ._LeftBack import *
+from ._LeftFront import *
+from ._LeftTof import *
 from ._Mag import *
 from ._Nav import *
 from ._NaviWheel import *
@@ -40,6 +48,7 @@ from ._StateDeal import *
 from ._StationUltra import *
 from ._SteerAndPump import *
 from ._TempHumidity import *
+from ._TripleUltra import *
 from ._Turbidity import *
 from ._TurbineMotor import *
 from ._Ultra import *

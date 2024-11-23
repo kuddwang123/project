@@ -8,22 +8,27 @@ import struct
 
 
 class NaviActionRequest(genpy.Message):
-  _md5sum = "3b1d78b57fe1f198da1fff71bf2370df"
+  _md5sum = "c93baf16004ca5924817d729d06ebba5"
   _type = "hj_interface/NaviActionRequest"
   _has_header = False  # flag to mark the presence of a Header object
-  _full_text = """uint8 action_cmd    # 11: 清扫水面 12: 池底清扫 13: 池壁清扫
+  _full_text = """uint8 action_cmd    # 1: slam建图 2: slam重定位
+                    # 11: 清扫水面 12: 池底清扫 13: 池壁清扫
+                    # 16：建图/重定位延边  17：极限延边
+                    # 18: 姿态调整
                     # 19: 清洁模式
                     # 21: 召回 22: 回充
-                    # 32: navi状态请求
+                    # 31: slam状态请求 32: navi状态请求 35: 获取清扫记录
+                    # 103: slam停止建图 104: slam停止定位
                     # 111: 暂停清扫 112: 继续清扫 113: 停止清扫
+                    # 115：停止建图/重定位延边 116：停止极限延边
                     # 123: 停止召回 124: 停止回充
                     
 uint8 clean_mode    # 1: 变频清洁 2: 标准清洁 3: 深度清洁
-uint8 clean_method  # 1: 随机清扫 2: 十字弓清扫
+bool  has_map       # true:有  false:没有
 
 """
-  __slots__ = ['action_cmd','clean_mode','clean_method']
-  _slot_types = ['uint8','uint8','uint8']
+  __slots__ = ['action_cmd','clean_mode','has_map']
+  _slot_types = ['uint8','uint8','bool']
 
   def __init__(self, *args, **kwds):
     """
@@ -33,7 +38,7 @@ uint8 clean_method  # 1: 随机清扫 2: 十字弓清扫
     changes.  You cannot mix in-order arguments and keyword arguments.
 
     The available fields are:
-       action_cmd,clean_mode,clean_method
+       action_cmd,clean_mode,has_map
 
     :param args: complete set of field values, in .msg order
     :param kwds: use keyword arguments corresponding to message field names
@@ -46,12 +51,12 @@ uint8 clean_method  # 1: 随机清扫 2: 十字弓清扫
         self.action_cmd = 0
       if self.clean_mode is None:
         self.clean_mode = 0
-      if self.clean_method is None:
-        self.clean_method = 0
+      if self.has_map is None:
+        self.has_map = False
     else:
       self.action_cmd = 0
       self.clean_mode = 0
-      self.clean_method = 0
+      self.has_map = False
 
   def _get_types(self):
     """
@@ -66,7 +71,7 @@ uint8 clean_method  # 1: 随机清扫 2: 十字弓清扫
     """
     try:
       _x = self
-      buff.write(_get_struct_3B().pack(_x.action_cmd, _x.clean_mode, _x.clean_method))
+      buff.write(_get_struct_3B().pack(_x.action_cmd, _x.clean_mode, _x.has_map))
     except struct.error as se: self._check_types(struct.error("%s: '%s' when writing '%s'" % (type(se), str(se), str(locals().get('_x', self)))))
     except TypeError as te: self._check_types(ValueError("%s: '%s' when writing '%s'" % (type(te), str(te), str(locals().get('_x', self)))))
 
@@ -82,7 +87,8 @@ uint8 clean_method  # 1: 随机清扫 2: 十字弓清扫
       _x = self
       start = end
       end += 3
-      (_x.action_cmd, _x.clean_mode, _x.clean_method,) = _get_struct_3B().unpack(str[start:end])
+      (_x.action_cmd, _x.clean_mode, _x.has_map,) = _get_struct_3B().unpack(str[start:end])
+      self.has_map = bool(self.has_map)
       return self
     except struct.error as e:
       raise genpy.DeserializationError(e)  # most likely buffer underfill
@@ -96,7 +102,7 @@ uint8 clean_method  # 1: 随机清扫 2: 十字弓清扫
     """
     try:
       _x = self
-      buff.write(_get_struct_3B().pack(_x.action_cmd, _x.clean_mode, _x.clean_method))
+      buff.write(_get_struct_3B().pack(_x.action_cmd, _x.clean_mode, _x.has_map))
     except struct.error as se: self._check_types(struct.error("%s: '%s' when writing '%s'" % (type(se), str(se), str(locals().get('_x', self)))))
     except TypeError as te: self._check_types(ValueError("%s: '%s' when writing '%s'" % (type(te), str(te), str(locals().get('_x', self)))))
 
@@ -113,7 +119,8 @@ uint8 clean_method  # 1: 随机清扫 2: 十字弓清扫
       _x = self
       start = end
       end += 3
-      (_x.action_cmd, _x.clean_mode, _x.clean_method,) = _get_struct_3B().unpack(str[start:end])
+      (_x.action_cmd, _x.clean_mode, _x.has_map,) = _get_struct_3B().unpack(str[start:end])
+      self.has_map = bool(self.has_map)
       return self
     except struct.error as e:
       raise genpy.DeserializationError(e)  # most likely buffer underfill
@@ -136,18 +143,38 @@ python3 = True if sys.hexversion > 0x03000000 else False
 import genpy
 import struct
 
+import hj_interface.msg
 
 class NaviActionResponse(genpy.Message):
-  _md5sum = "25458147911545c320c4c0a299eff763"
+  _md5sum = "dc13bf94fa3ab8d539d14adc72a924bd"
   _type = "hj_interface/NaviActionResponse"
   _has_header = False  # flag to mark the presence of a Header object
   _full_text = """
-uint8 result   # 0: 收到 
-               # 11: navi待机 12: navi清扫中
-               # 21: navi召回中 22: navi回充中
-"""
-  __slots__ = ['result']
-  _slot_types = ['uint8']
+uint8 result                # 0: 收到 
+                            # 11: navi待机 12: navi清扫中
+                            # 16：navi建图/重定位延边中 17：navi极限延边中
+                            # 18：navi姿态调整中
+                            # 21: navi召回中 22: navi回充中
+CleanRecord CleanRecord     # 清扫记录
+
+================================================================================
+MSG: hj_interface/CleanRecord
+float32 clean_speed             # 清洁速度 单位：m/s
+float32 surface_clean_area      # 清洁水面面积 单位：m2
+float32 bottom_clean_area       # 清洁池底面积
+float32 wall_clean_area         # 清洁池壁面积
+float32 pool_area               # 泳池面积
+float32 pool_volume             # 泳池体积
+string map_line_file_path       # 地图轨迹文件路径
+
+## not to be reported for the time being
+#uint8 avoid_obstacles          # 避障次数
+#int32 get_out_time             # 脱困时长 单位：秒
+#uint8 get_out_failed           # 脱困失败次数
+#uint8 get_out_success          # 脱困成功次数
+#float32 supple_clean_area      # 补扫面积 """
+  __slots__ = ['result','CleanRecord']
+  _slot_types = ['uint8','hj_interface/CleanRecord']
 
   def __init__(self, *args, **kwds):
     """
@@ -157,7 +184,7 @@ uint8 result   # 0: 收到
     changes.  You cannot mix in-order arguments and keyword arguments.
 
     The available fields are:
-       result
+       result,CleanRecord
 
     :param args: complete set of field values, in .msg order
     :param kwds: use keyword arguments corresponding to message field names
@@ -168,8 +195,11 @@ uint8 result   # 0: 收到
       # message fields cannot be None, assign default values for those that are
       if self.result is None:
         self.result = 0
+      if self.CleanRecord is None:
+        self.CleanRecord = hj_interface.msg.CleanRecord()
     else:
       self.result = 0
+      self.CleanRecord = hj_interface.msg.CleanRecord()
 
   def _get_types(self):
     """
@@ -183,8 +213,14 @@ uint8 result   # 0: 收到
     :param buff: buffer, ``StringIO``
     """
     try:
-      _x = self.result
-      buff.write(_get_struct_B().pack(_x))
+      _x = self
+      buff.write(_get_struct_B6f().pack(_x.result, _x.CleanRecord.clean_speed, _x.CleanRecord.surface_clean_area, _x.CleanRecord.bottom_clean_area, _x.CleanRecord.wall_clean_area, _x.CleanRecord.pool_area, _x.CleanRecord.pool_volume))
+      _x = self.CleanRecord.map_line_file_path
+      length = len(_x)
+      if python3 or type(_x) == unicode:
+        _x = _x.encode('utf-8')
+        length = len(_x)
+      buff.write(struct.Struct('<I%ss'%length).pack(length, _x))
     except struct.error as se: self._check_types(struct.error("%s: '%s' when writing '%s'" % (type(se), str(se), str(locals().get('_x', self)))))
     except TypeError as te: self._check_types(ValueError("%s: '%s' when writing '%s'" % (type(te), str(te), str(locals().get('_x', self)))))
 
@@ -196,10 +232,22 @@ uint8 result   # 0: 收到
     if python3:
       codecs.lookup_error("rosmsg").msg_type = self._type
     try:
+      if self.CleanRecord is None:
+        self.CleanRecord = hj_interface.msg.CleanRecord()
       end = 0
+      _x = self
       start = end
-      end += 1
-      (self.result,) = _get_struct_B().unpack(str[start:end])
+      end += 25
+      (_x.result, _x.CleanRecord.clean_speed, _x.CleanRecord.surface_clean_area, _x.CleanRecord.bottom_clean_area, _x.CleanRecord.wall_clean_area, _x.CleanRecord.pool_area, _x.CleanRecord.pool_volume,) = _get_struct_B6f().unpack(str[start:end])
+      start = end
+      end += 4
+      (length,) = _struct_I.unpack(str[start:end])
+      start = end
+      end += length
+      if python3:
+        self.CleanRecord.map_line_file_path = str[start:end].decode('utf-8', 'rosmsg')
+      else:
+        self.CleanRecord.map_line_file_path = str[start:end]
       return self
     except struct.error as e:
       raise genpy.DeserializationError(e)  # most likely buffer underfill
@@ -212,8 +260,14 @@ uint8 result   # 0: 收到
     :param numpy: numpy python module
     """
     try:
-      _x = self.result
-      buff.write(_get_struct_B().pack(_x))
+      _x = self
+      buff.write(_get_struct_B6f().pack(_x.result, _x.CleanRecord.clean_speed, _x.CleanRecord.surface_clean_area, _x.CleanRecord.bottom_clean_area, _x.CleanRecord.wall_clean_area, _x.CleanRecord.pool_area, _x.CleanRecord.pool_volume))
+      _x = self.CleanRecord.map_line_file_path
+      length = len(_x)
+      if python3 or type(_x) == unicode:
+        _x = _x.encode('utf-8')
+        length = len(_x)
+      buff.write(struct.Struct('<I%ss'%length).pack(length, _x))
     except struct.error as se: self._check_types(struct.error("%s: '%s' when writing '%s'" % (type(se), str(se), str(locals().get('_x', self)))))
     except TypeError as te: self._check_types(ValueError("%s: '%s' when writing '%s'" % (type(te), str(te), str(locals().get('_x', self)))))
 
@@ -226,10 +280,22 @@ uint8 result   # 0: 收到
     if python3:
       codecs.lookup_error("rosmsg").msg_type = self._type
     try:
+      if self.CleanRecord is None:
+        self.CleanRecord = hj_interface.msg.CleanRecord()
       end = 0
+      _x = self
       start = end
-      end += 1
-      (self.result,) = _get_struct_B().unpack(str[start:end])
+      end += 25
+      (_x.result, _x.CleanRecord.clean_speed, _x.CleanRecord.surface_clean_area, _x.CleanRecord.bottom_clean_area, _x.CleanRecord.wall_clean_area, _x.CleanRecord.pool_area, _x.CleanRecord.pool_volume,) = _get_struct_B6f().unpack(str[start:end])
+      start = end
+      end += 4
+      (length,) = _struct_I.unpack(str[start:end])
+      start = end
+      end += length
+      if python3:
+        self.CleanRecord.map_line_file_path = str[start:end].decode('utf-8', 'rosmsg')
+      else:
+        self.CleanRecord.map_line_file_path = str[start:end]
       return self
     except struct.error as e:
       raise genpy.DeserializationError(e)  # most likely buffer underfill
@@ -238,14 +304,14 @@ _struct_I = genpy.struct_I
 def _get_struct_I():
     global _struct_I
     return _struct_I
-_struct_B = None
-def _get_struct_B():
-    global _struct_B
-    if _struct_B is None:
-        _struct_B = struct.Struct("<B")
-    return _struct_B
+_struct_B6f = None
+def _get_struct_B6f():
+    global _struct_B6f
+    if _struct_B6f is None:
+        _struct_B6f = struct.Struct("<B6f")
+    return _struct_B6f
 class NaviAction(object):
   _type          = 'hj_interface/NaviAction'
-  _md5sum = 'b1f02f3c6e01c97053c2bbfe0bcc890f'
+  _md5sum = '948d50ddd761bde73fa9adcb9818b051'
   _request_class  = NaviActionRequest
   _response_class = NaviActionResponse

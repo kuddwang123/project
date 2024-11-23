@@ -19,9 +19,8 @@
 #include "log4cxx/spi/loggingevent.h"
 #include "node_factory.h"
 namespace hj_bf {
-constexpr char g_log_config_path_param_name[] = "HJ_LOG_CONFIG_PATH";
+// constexpr char g_log_config_path_param_name[] = "HJ_LOG_CONFIG_PATH";
 constexpr char g_log_close[] = "HJ_LOG_CLOSE_";
-constexpr char g_pass_word[] = "221100";
 void deleteFilesWithPrefix(const std::string& directory, const std::string& prefix) {
   DIR* dir = opendir(directory.c_str());
   if (dir == nullptr) {
@@ -45,48 +44,21 @@ void deleteFilesWithPrefix(const std::string& directory, const std::string& pref
   closedir(dir);
 }
 
-bool logInit(const std::string& config_path,int crypt_flag) {
-  std::string temp_log_close = g_log_close;
-  std::string temp_node_name = ros::this_node::getName();
-  temp_node_name.erase(std::remove(temp_node_name.begin(), temp_node_name.end(), '/'), temp_node_name.end());
-  temp_log_close += temp_node_name;
-  char* switch_cstr = NULL;
-  switch_cstr = getenv(temp_log_close.c_str());
-  if (switch_cstr != NULL) {
-    if (strcmp(switch_cstr, "close") == 0) {
-      std::cout << "close log of module: " << ros::this_node::getName() << std::endl;
-      return true;
-    }
-  }
-  std::string temp_config_path = config_path;
+bool logInit(const std::string& config_path, const std::vector<unsigned char>& pass_word) {
   bool ret = false;
-  char* config_file_cstr = NULL;
-  config_file_cstr = getenv(g_log_config_path_param_name);
-  if (NULL != config_file_cstr) {
-    temp_config_path = config_file_cstr;
-  }
-  log4cxx::PropertyConfigurator::configure(temp_config_path.c_str());
+  log4cxx::PropertyConfigurator::configure(config_path.c_str());
   log4cxx::LoggerPtr rootLogger = log4cxx::Logger::getRootLogger();
   log4cxx::RollingFileAppenderPtr appender = rootLogger->getAppender("file");
+  std::vector<unsigned char> temp_pass_word = pass_word;
   if (nullptr != appender) {
-    // std::string open = OPEN_CRYPT;
-    // if (open == "true") {
-    //   appender->setEncryption(true);
-    //   std::cout << "wangqing true:" << std::endl;
-    // } else {
-    //   appender->setEncryption(false);
-    //   std::cout << "wangqing false:" << std::endl;
-    // }
-    if (crypt_flag == 0) {
-      appender->setEncryption(false);
-      std::cout << "wangqing false:" << std::endl;
-    } else {
+    if (temp_pass_word.size() == 6) {
       appender->setEncryption(true);
-      std::cout << "wangqing true:" << std::endl;
+      std::cout << "wangqing open:" << std::endl;
+      appender->setPassWord(temp_pass_word);
+    } else {
+      appender->setEncryption(false);
+      std::cout << "wangqing close:" << std::endl;
     }
-
-    std::vector<unsigned char> source(g_pass_word, g_pass_word + strlen(g_pass_word));
-    appender->setPassWord(source);
     std::string temp_file_path = appender->getFile();
     size_t lastSlashPos = temp_file_path.find_last_of('/');
 
@@ -101,9 +73,9 @@ bool logInit(const std::string& config_path,int crypt_flag) {
       log4cxx::helpers::Pool p;
       appender->activateOptions(p);
       ret = true;
-      //      std::cout << "wangqing:" << new_log_file_name << std::endl;
     }
-  }else {
+    
+  } else {
     std::cerr << "err appender == null:" << std::endl;
   }
   return ret;

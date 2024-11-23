@@ -5,10 +5,10 @@
 // Authors: 609384347@qq.com (wangqing, 2023-12-22)
 #include "demo.h"
 
-HJ_REGISTER_FUNCTION(factory) {
-  std::cerr << "minos register factory" << FUNCTION_NAME << std::endl;
-  factory.registerCreater<collect_node_ns::Demo>(FUNCTION_NAME);
-}
+// HJ_REGISTER_FUNCTION(factory) {
+//   std::cerr << "minos register factory" << FUNCTION_NAME << std::endl;
+//   factory.registerCreater<collect_node_ns::Demo>(FUNCTION_NAME);
+// }
 namespace collect_node_ns {
 
 Demo::Demo(const rapidjson::Value &json_conf) : hj_bf::Function(json_conf) {

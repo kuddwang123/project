@@ -16,7 +16,8 @@
 #include "function_factory.h"
 #include "node_factory.h"
 #include "monitor.h"
-#include "record_msg.h"
+#include "record_msg_alg.h"
+#include "record_msg_lasting.h"
 #include "log.h"
 
 
@@ -29,6 +30,7 @@ class UtilsFunc : public hj_bf::Function {
  private:
   Monitor monitor_obj_;
   RecordMsg record_msg_obj_;
+  RecordMsgLasting record_msg_lasting_obj_;
 };
 
 }  // namespace collect_node_utils_func

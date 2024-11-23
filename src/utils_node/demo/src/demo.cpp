@@ -91,6 +91,7 @@ void Demo::callback2(const hj_bf::HJTimerEvent &)
     std::cout << "minos1:"
               << "3, my_lock out" << std::endl;
   }
+  HJ_ERROR("HJ_ERROR TEST IN utils_node");
 }
 
 // int  loopFunc() {
@@ -145,11 +146,13 @@ Demo::Demo(const rapidjson::Value &json_conf) : hj_bf::Function(json_conf) {
   // read your config
   boost::function<void(const std_msgs::String::ConstPtr&)> func_callback(chatterCallback, boost::placeholders::_1);
 
-  test_sub_ = hj_bf::HJSubscribe("collect_test", 1000, func_callback);
+  test_sub_ = hj_bf::HJSubscribe("collect_test3", 1000, func_callback);
   // your code
   std::cerr << "minos just a demo" << std::endl;
   timer2 = hj_bf::HJCreateTimer("timer2", 3* 1000* 1000, &Demo::callback2,this);
 //  auto state = std::thread(&loopFunc2);  // 开线程
   // state.detach();
+  // test_sub_.~HJSubscriber();
+  std::cerr << "minos test_sub_ ~HJSubscriber" << std::endl;
 }
 }  // namespace utils_node_ns

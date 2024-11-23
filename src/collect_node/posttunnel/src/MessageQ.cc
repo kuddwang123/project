@@ -16,7 +16,8 @@ FileMessage::FileMessage(const File& file, uint8_t type, bool needDelete):
     expireSec_(0),
     urlTs_(0),
     failTimes_(0),
-    maxTimes_(3)
+    maxTimes_(3),
+    controlLogId_(0)
 {
     boost::uuids::random_generator rgen;
     boost::uuids::uuid a_uuid = rgen();
@@ -30,10 +31,7 @@ FileMessage::FileMessage(const std::string id,
     const std::string& filepath,
     const std::string& filepathca,
     time_t ts,
-    const std::string& url,
-    const std::string& md5,
-    uint32_t urlexpire,
-    time_t urlTs
+    const std::string& md5
     ):
     id_(id),
     timestamp_(ts),
@@ -41,12 +39,12 @@ FileMessage::FileMessage(const std::string id,
     needDelete_(needDelete),
     file_(filepath),
     cachedFile_(filepathca),
-    expireSec_(urlexpire),
-    url_(url),
+    expireSec_(0),
     md5_(md5),
-    urlTs_(urlTs),
+    urlTs_(0),
     failTimes_(0),
-    maxTimes_(3)
+    maxTimes_(3),
+    controlLogId_(0)
 {
 
 }
@@ -104,6 +102,16 @@ File FileMessage::getCacheHandler()
 uint8_t FileMessage::getType()
 {
     return type_;
+}
+
+uint64_t FileMessage::getLogId()
+{
+    return controlLogId_;
+}
+
+void FileMessage::setLogId(uint64_t logid)
+{
+    controlLogId_ = logid;
 }
 
 void FileMessage::setUrl(const std::string url)

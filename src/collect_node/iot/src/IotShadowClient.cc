@@ -1,17 +1,20 @@
 #include "IotShadowClient.h"
 #include "log.h"
 #include "error.h"
+#include "Utils.h"
 #include <aws/crt/Api.h>
 #include <future>
 #include <aws/iotshadow/GetShadowRequest.h>
 #include <sys/prctl.h>
 #include <pthread.h>
 namespace collect_node_iot {
+extern utils::CountDownLatch cdlatch_g;
 
 IotShadowClient::IotShadowClient(const std::string& thingName)
     :thingName_(thingName),
     shadowClient_(AwsConnectionManager::instance()->getAwsConnection()),
-    subIotFail_(0xFF)
+    subIotFail_(0xFF),
+    subRun_(false)
 {
 
 }
@@ -24,7 +27,16 @@ IotShadowClient::~IotShadowClient()
 void IotShadowClient::connectSlot() 
 {
     HJ_INFO("Iot SHADWO connect succ back call!\n");
- 
+    
+    if (subRun_.load()) {
+        HJ_INFO("sub in run, skip");
+        return;
+    }
+
+    if (subIotFail_.load() == 0x00) {
+        HJ_INFO("sub shadow topic done, skip");
+        return;
+    }
     subIotCoreThread_ = std::thread(&IotShadowClient::subscribeToCore, this);
     subIotCoreThread_.detach();
 }
@@ -36,10 +48,10 @@ void IotShadowClient::disconnSlot()
 
 void IotShadowClient::subscribeToCore()
 {
-    HJ_INFO("Subscribe to IOT core...\n");
+    HJ_INFO("Subscribe to IOT shadow core...\n");
     prctl(PR_SET_NAME, "subscribeToCore");
     ros::Rate loop_rate(100);
-
+/*
     subToDeleteShadowAccepted();
     subToDeleteShadowRejected();
     subToGetShadowAccepted();
@@ -48,7 +60,8 @@ void IotShadowClient::subscribeToCore()
     subToUpdateShadowRejected();
     subToShadowDeltaUpdatedEvents();
     subToShadowUpdatedEvents();
-
+*/
+    subRun_.store(true);
     while(subIotFail_.load() != 0x00) {
         if (subIotFail_.load() & SHADOW_DEL_ACCEP_FAIL) {
             subToDeleteShadowAccepted();
@@ -78,7 +91,9 @@ void IotShadowClient::subscribeToCore()
         loop_rate.sleep();
     }
     
-    HJ_INFO("Subscribe to IOT core done!\n");
+    HJ_INFO("Subscribe to IOT shadow core done!\n");
+    subRun_.store(false);
+    cdlatch_g.countDown();
 }
 
 /* 

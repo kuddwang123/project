@@ -11,7 +11,7 @@
 #ifndef SRC_COLLECT_NODE_UTILS_FUNC_INCLUDE_HANDLE_ACTION_H_
 #define SRC_COLLECT_NODE_UTILS_FUNC_INCLUDE_HANDLE_ACTION_H_
 
-#include <array>
+#include <vector>
 #include <string>
 #include "function_factory.h"
 #include "node_factory.h"
@@ -21,8 +21,17 @@
 namespace collect_handle_action {
 
 enum function_type {
-  kIotFunc = 1,
-  kLogFunc = 2
+  kIotFunc = 0,
+  kLogFunc,
+  kPostTunnelFunc,
+  kMcuFunc,
+  kResetFunNum
+};
+
+enum shutdown_function_type {
+  kShoutdownIotFunc = 0,
+  kShoutdownPostTunnelFunc,
+  kShoutdownFunNum
 };
 
 class HandleAction {
@@ -37,7 +46,8 @@ class HandleAction {
   HandleAction(const HandleAction&) = delete;
   HandleAction(HandleAction&&) = delete;
 
-  std::atomic<uint8_t> function_count_;
+  std::vector<uint8_t> function_vec_;
+  std::vector<uint8_t> shutdown_function_vec_;
   hj_bf::HJSubscriber sub_sys_action_;
   hj_bf::HJPublisher sys_action_response_;
   hj_bf::HJSubscriber sub_func_reponse_;

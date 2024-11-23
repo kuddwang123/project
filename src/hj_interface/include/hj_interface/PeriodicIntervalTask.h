@@ -29,6 +29,7 @@ struct PeriodicIntervalTask_
     , date()
     , start_time()
     , smart(0)
+    , under_water(0)
     , interval_days(0)
     , clean_areas()
     , clean_mode(0)  {
@@ -38,6 +39,7 @@ struct PeriodicIntervalTask_
     , date(_alloc)
     , start_time(_alloc)
     , smart(0)
+    , under_water(0)
     , interval_days(0)
     , clean_areas(_alloc)
     , clean_mode(0)  {
@@ -57,6 +59,9 @@ struct PeriodicIntervalTask_
 
    typedef int32_t _smart_type;
   _smart_type smart;
+
+   typedef int32_t _under_water_type;
+  _under_water_type under_water;
 
    typedef int32_t _interval_days_type;
   _interval_days_type interval_days;
@@ -100,6 +105,7 @@ bool operator==(const ::hj_interface::PeriodicIntervalTask_<ContainerAllocator1>
     lhs.date == rhs.date &&
     lhs.start_time == rhs.start_time &&
     lhs.smart == rhs.smart &&
+    lhs.under_water == rhs.under_water &&
     lhs.interval_days == rhs.interval_days &&
     lhs.clean_areas == rhs.clean_areas &&
     lhs.clean_mode == rhs.clean_mode;
@@ -159,12 +165,12 @@ struct MD5Sum< ::hj_interface::PeriodicIntervalTask_<ContainerAllocator> >
 {
   static const char* value()
   {
-    return "3ff5b99bf0eb1cd7b60781ad216dc604";
+    return "22fc7d5efb1e9bff33adaef3c29d47b5";
   }
 
   static const char* value(const ::hj_interface::PeriodicIntervalTask_<ContainerAllocator>&) { return value(); }
-  static const uint64_t static_value1 = 0x3ff5b99bf0eb1cd7ULL;
-  static const uint64_t static_value2 = 0xb60781ad216dc604ULL;
+  static const uint64_t static_value1 = 0x22fc7d5efb1e9bffULL;
+  static const uint64_t static_value2 = 0x33adaef3c29d47b5ULL;
 };
 
 template<class ContainerAllocator>
@@ -187,6 +193,7 @@ struct Definition< ::hj_interface::PeriodicIntervalTask_<ContainerAllocator> >
 "string date\n"
 "string start_time\n"
 "int32 smart        # 0-普通模式 1-智能模式\n"
+"int32 under_water  # 0-不是水下模式 1-水下模式\n"
 "int32 interval_days\n"
 "CleanAreas[] clean_areas\n"
 "int32 clean_mode   # 1-变频 2-标准 3-深度\n"
@@ -217,6 +224,7 @@ namespace serialization
       stream.next(m.date);
       stream.next(m.start_time);
       stream.next(m.smart);
+      stream.next(m.under_water);
       stream.next(m.interval_days);
       stream.next(m.clean_areas);
       stream.next(m.clean_mode);
@@ -246,6 +254,8 @@ struct Printer< ::hj_interface::PeriodicIntervalTask_<ContainerAllocator> >
     Printer<std::basic_string<char, std::char_traits<char>, typename std::allocator_traits<ContainerAllocator>::template rebind_alloc<char>>>::stream(s, indent + "  ", v.start_time);
     s << indent << "smart: ";
     Printer<int32_t>::stream(s, indent + "  ", v.smart);
+    s << indent << "under_water: ";
+    Printer<int32_t>::stream(s, indent + "  ", v.under_water);
     s << indent << "interval_days: ";
     Printer<int32_t>::stream(s, indent + "  ", v.interval_days);
     s << indent << "clean_areas[]" << std::endl;

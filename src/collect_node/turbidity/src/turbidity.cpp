@@ -5,6 +5,7 @@
 // Authors: 609384347@qq.com (wangqing, 2023-12-22)
 #include "turbidity.h"
 #include "log.h"
+#include "shm_interface.h"
 
 HJ_REGISTER_FUNCTION(factory) {
   HJ_INFO("minos register factory, function_name:%s", FUNCTION_NAME);
@@ -14,6 +15,10 @@ HJ_REGISTER_FUNCTION(factory) {
 namespace collect_node_turbidity {
 
 void Turbidimeter::TurbidimeterTimer(const hj_bf::HJTimerEvent &) {
+  bool res = hj_bf::getVariable("module_restart_flag", module_restart_flag_);
+  if (res && module_restart_flag_ == 1) {
+    return;
+  }
   static uint8_t s_send_tur_data[5] = {0x18, 0x05, 0x00, 0x01, 0x0d};  // 主机读脏污数据协议，0x01为写指令
   static uint8_t s_read_buf[8];  // 从机发送数据帧 {0x18，0x05，0x00，脏污值，0x0d}
                                  // 0x18为帧头固定值，0x05为数据长度，0x00为写应答指令，脏污值为0~255， 0x0d为帧尾固定值
@@ -26,6 +31,24 @@ void Turbidimeter::TurbidimeterTimer(const hj_bf::HJTimerEvent &) {
       turbidity = s_read_buf[3];
       tur_msg_.timestamp = ros::Time::now();
       tur_msg_.turbidity = turbidity;
+      bool charge_status = charge_status_.load();
+      if (!charge_status &&turbidity >= THRESHOLD_VALUE) {  // 脏污值大于243，认为超过阈值
+        greater_threshold_count_ = (greater_threshold_count_ > THRESHOLD_COUNT ?
+                                    THRESHOLD_COUNT + 1 : greater_threshold_count_ + 1);
+      } else {
+        greater_threshold_count_ = 0;
+      }
+      if (threshold_status_ && greater_threshold_count_ >= THRESHOLD_COUNT) {
+        srv_msg_.request.code_val = TUR_DATA_OVERFLOW_ERROR;
+        srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::ERROR;
+        hj_bf::HjPushSrv(srv_msg_);
+        threshold_status_ = false;
+      } else if (!threshold_status_ && greater_threshold_count_ == 0) {
+        srv_msg_.request.code_val = TUR_DATA_OVERFLOW_ERROR;
+        srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::NORMAL;
+        hj_bf::HjPushSrv(srv_msg_);
+        threshold_status_ = true;
+      }
       if (!status_) {
         srv_msg_.request.code_val = TUR_DATA_ERROR;
         srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::NORMAL;
@@ -35,17 +58,18 @@ void Turbidimeter::TurbidimeterTimer(const hj_bf::HJTimerEvent &) {
       error_count_ = 0;
       chatter_pub_.publish(tur_msg_);
     } else {
-      if (status_ && error_count_ > ERROR_COUNT) {
+      if (status_ && error_count_ >= ERROR_COUNT) {
         srv_msg_.request.code_val = TUR_DATA_ERROR;
         srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::ERROR;
         hj_bf::HjPushSrv(srv_msg_);
         status_ = false;
-        HJ_ERROR("turbidimeter_timer read frame format error.ret=%d", ret);
+        HJ_ERROR("turbidimeter_timer read frame format error.ret=%d, data=%x,%x,%x,%x,%x",
+                  ret, s_read_buf[0], s_read_buf[1], s_read_buf[2], s_read_buf[3], s_read_buf[4]);
       }
       error_count_++;
     }
   } else {
-    if (status_ && error_count_ > ERROR_COUNT) {
+    if (status_ && error_count_ >= ERROR_COUNT) {
       srv_msg_.request.code_val = TUR_DATA_ERROR;
       srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::ERROR;
       hj_bf::HjPushSrv(srv_msg_);
@@ -64,6 +88,14 @@ void Turbidimeter::RestartCallback(const std_msgs::Bool::ConstPtr& msg) {
   if (msg->data != 0 && !init_status_) {
     HJ_INFO("restart Turbidimeter");
     Start();
+  }
+}
+
+void Turbidimeter::BatCallback(const hj_interface::Bat::ConstPtr& msg) {
+  if (msg->ch_vol > 15000 && msg->charger_ch_cur > 50) {
+    charge_status_.store(true);
+  } else {
+    charge_status_.store(false);
   }
 }
 
@@ -99,6 +131,7 @@ Turbidimeter::Turbidimeter(const rapidjson::Value &json_conf) : hj_bf::Function(
   // your  code
   chatter_pub_ = hj_bf::HJAdvertise<hj_interface::Turbidity>("turbidity_data", 10);
   restart_sub_ = hj_bf::HJSubscribe("/xxx", 1, &Turbidimeter::RestartCallback, this);
+  bat_sub_ = hj_bf::HJSubscribe("/bat_chatter", 1, &Turbidimeter::BatCallback, this);
 
   if (Start()) {
     HJ_INFO("turbidity init success");

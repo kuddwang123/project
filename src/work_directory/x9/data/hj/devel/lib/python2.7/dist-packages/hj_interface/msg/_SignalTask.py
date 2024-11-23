@@ -10,7 +10,7 @@ import genpy
 import hj_interface.msg
 
 class SignalTask(genpy.Message):
-  _md5sum = "ac67a97ced053e0eda7d322364fa5422"
+  _md5sum = "d866aa412153b3194b0cd643c96afe3f"
   _type = "hj_interface/SignalTask"
   _has_header = False  # flag to mark the presence of a Header object
   _full_text = """int32 task_type    #0-快速任务 1-计时任务 2-周期任务 3-手动任务
@@ -18,6 +18,7 @@ int32 operate      #0-增加任务 1-覆盖任务
 string overrideID  #表示要覆盖的任务的名称
 string name_id
 string start_time
+int32 smart        # 0-普通模式 1-智能模式
 time start_time_stamp
 int32 clean_time   # minutes
 CleanAreas[] clean_areas
@@ -27,8 +28,8 @@ MSG: hj_interface/CleanAreas
 int32 clean_area  #清扫区域 1-水面 2-池底 3-池壁
 int32 count       #清扫次数
 int32 time        #清扫时间单位分钟"""
-  __slots__ = ['task_type','operate','overrideID','name_id','start_time','start_time_stamp','clean_time','clean_areas','clean_mode']
-  _slot_types = ['int32','int32','string','string','string','time','int32','hj_interface/CleanAreas[]','int32']
+  __slots__ = ['task_type','operate','overrideID','name_id','start_time','smart','start_time_stamp','clean_time','clean_areas','clean_mode']
+  _slot_types = ['int32','int32','string','string','string','int32','time','int32','hj_interface/CleanAreas[]','int32']
 
   def __init__(self, *args, **kwds):
     """
@@ -38,7 +39,7 @@ int32 time        #清扫时间单位分钟"""
     changes.  You cannot mix in-order arguments and keyword arguments.
 
     The available fields are:
-       task_type,operate,overrideID,name_id,start_time,start_time_stamp,clean_time,clean_areas,clean_mode
+       task_type,operate,overrideID,name_id,start_time,smart,start_time_stamp,clean_time,clean_areas,clean_mode
 
     :param args: complete set of field values, in .msg order
     :param kwds: use keyword arguments corresponding to message field names
@@ -57,6 +58,8 @@ int32 time        #清扫时间单位分钟"""
         self.name_id = ''
       if self.start_time is None:
         self.start_time = ''
+      if self.smart is None:
+        self.smart = 0
       if self.start_time_stamp is None:
         self.start_time_stamp = genpy.Time()
       if self.clean_time is None:
@@ -71,6 +74,7 @@ int32 time        #清扫时间单位分钟"""
       self.overrideID = ''
       self.name_id = ''
       self.start_time = ''
+      self.smart = 0
       self.start_time_stamp = genpy.Time()
       self.clean_time = 0
       self.clean_areas = []
@@ -109,7 +113,7 @@ int32 time        #清扫时间单位分钟"""
         length = len(_x)
       buff.write(struct.Struct('<I%ss'%length).pack(length, _x))
       _x = self
-      buff.write(_get_struct_2Ii().pack(_x.start_time_stamp.secs, _x.start_time_stamp.nsecs, _x.clean_time))
+      buff.write(_get_struct_i2Ii().pack(_x.smart, _x.start_time_stamp.secs, _x.start_time_stamp.nsecs, _x.clean_time))
       length = len(self.clean_areas)
       buff.write(_struct_I.pack(length))
       for val1 in self.clean_areas:
@@ -166,8 +170,8 @@ int32 time        #清扫时间单位分钟"""
         self.start_time = str[start:end]
       _x = self
       start = end
-      end += 12
-      (_x.start_time_stamp.secs, _x.start_time_stamp.nsecs, _x.clean_time,) = _get_struct_2Ii().unpack(str[start:end])
+      end += 16
+      (_x.smart, _x.start_time_stamp.secs, _x.start_time_stamp.nsecs, _x.clean_time,) = _get_struct_i2Ii().unpack(str[start:end])
       start = end
       end += 4
       (length,) = _struct_I.unpack(str[start:end])
@@ -216,7 +220,7 @@ int32 time        #清扫时间单位分钟"""
         length = len(_x)
       buff.write(struct.Struct('<I%ss'%length).pack(length, _x))
       _x = self
-      buff.write(_get_struct_2Ii().pack(_x.start_time_stamp.secs, _x.start_time_stamp.nsecs, _x.clean_time))
+      buff.write(_get_struct_i2Ii().pack(_x.smart, _x.start_time_stamp.secs, _x.start_time_stamp.nsecs, _x.clean_time))
       length = len(self.clean_areas)
       buff.write(_struct_I.pack(length))
       for val1 in self.clean_areas:
@@ -274,8 +278,8 @@ int32 time        #清扫时间单位分钟"""
         self.start_time = str[start:end]
       _x = self
       start = end
-      end += 12
-      (_x.start_time_stamp.secs, _x.start_time_stamp.nsecs, _x.clean_time,) = _get_struct_2Ii().unpack(str[start:end])
+      end += 16
+      (_x.smart, _x.start_time_stamp.secs, _x.start_time_stamp.nsecs, _x.clean_time,) = _get_struct_i2Ii().unpack(str[start:end])
       start = end
       end += 4
       (length,) = _struct_I.unpack(str[start:end])
@@ -299,12 +303,6 @@ _struct_I = genpy.struct_I
 def _get_struct_I():
     global _struct_I
     return _struct_I
-_struct_2Ii = None
-def _get_struct_2Ii():
-    global _struct_2Ii
-    if _struct_2Ii is None:
-        _struct_2Ii = struct.Struct("<2Ii")
-    return _struct_2Ii
 _struct_2i = None
 def _get_struct_2i():
     global _struct_2i
@@ -323,3 +321,9 @@ def _get_struct_i():
     if _struct_i is None:
         _struct_i = struct.Struct("<i")
     return _struct_i
+_struct_i2Ii = None
+def _get_struct_i2Ii():
+    global _struct_i2Ii
+    if _struct_i2Ii is None:
+        _struct_i2Ii = struct.Struct("<i2Ii")
+    return _struct_i2Ii

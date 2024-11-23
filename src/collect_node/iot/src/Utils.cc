@@ -4,6 +4,8 @@
 #include <ifaddrs.h>
 #include <arpa/inet.h>
 #include <iomanip>
+#include <cstdlib>
+#include <ctime>
 #include <openssl/evp.h>
 #include <openssl/aes.h>
 #include <openssl/err.h>
@@ -40,7 +42,10 @@ std::string aesCbc128Encode(const std::string& plaintext, unsigned char* key, un
     std::string aesenc;
     int plaintext_len = plaintext.size();
 
-    int paddingLength = AES_BLOCK_SIZE - (plaintext_len % AES_BLOCK_SIZE);
+    int paddingLength = 0;
+    if (plaintext_len % AES_BLOCK_SIZE != 0) {
+        paddingLength = AES_BLOCK_SIZE - (plaintext_len % AES_BLOCK_SIZE);
+    }
     int ciperlen = plaintext_len + paddingLength;
     unsigned char* ciphertext = new unsigned char[ciperlen];
     memset(ciphertext, 0, ciperlen);
@@ -60,7 +65,7 @@ std::string aesCbc128Encode(const std::string& plaintext, unsigned char* key, un
     return aesenc;
 }
 
-std::string aesCbc128Decode(const unsigned char* ciphertext, ssize_t ciphertext_len, unsigned char* key, unsigned char* iv)
+bool aesCbc128Decode(const unsigned char* ciphertext, ssize_t ciphertext_len, unsigned char* key, unsigned char* iv, std::string& out)
 {    
     EVP_CIPHER_CTX *ctx;
     int len;
@@ -70,14 +75,14 @@ std::string aesCbc128Decode(const unsigned char* ciphertext, ssize_t ciphertext_
     // Create and initialize the context
     if (!(ctx = EVP_CIPHER_CTX_new())) {
         HJ_ERROR("evp new fail\n");
-        return "";
+        return false;
     }
 
     // Initialize decryption
     if (1 != EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, key, iv)) {
         EVP_CIPHER_CTX_free(ctx);
         HJ_ERROR("Decryption init failed\n");
-        return "";
+        return false;
     }
 
     EVP_CIPHER_CTX_set_padding(ctx, 0);
@@ -89,7 +94,7 @@ std::string aesCbc128Decode(const unsigned char* ciphertext, ssize_t ciphertext_
         EVP_CIPHER_CTX_free(ctx);
         delete[] plaintext;
 	    HJ_ERROR("Decryption process failed\n");
-        return "";
+        return false;
     }
 
     // Decrypt the final block (which may contain padding)
@@ -97,17 +102,16 @@ std::string aesCbc128Decode(const unsigned char* ciphertext, ssize_t ciphertext_
         EVP_CIPHER_CTX_free(ctx);
         delete[] plaintext;
 	    HJ_ERROR("Decryption final failed\n");
-        return "";
+        return false;
     }
 
     EVP_CIPHER_CTX_free(ctx);
 
-    std::string out;
     out.assign(reinterpret_cast<char*>(plaintext), strlen(reinterpret_cast<const char*>(plaintext)));
 
     delete[] plaintext;
 
-    return out;
+    return true;
 }
 
 std::string documentToString(const rapidjson::Document& doc) 
@@ -178,6 +182,32 @@ void replaceSpaceWithUnderline(std::string& str)
     }
 }
 
+std::string randomString(uint8_t length)
+{
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+    const std::string charset = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+    std::string result;
+    result.reserve(length);
+
+    for (int i = 0; i < length; ++i) {
+        int random_index = std::rand() % charset.length();
+        result += charset[random_index];
+    }
+
+    return result;
+}
+
+std::string removeChar(const std::string& str, char ch)
+{
+    std::string out;
+    for (const auto& c : str) {
+        if (c != ch) {
+            out += c;
+        }
+    }
+    return out;
+}
+
 DevInfo::DevInfo(const char* filepath):
     ifs_(filepath)
 {
@@ -210,6 +240,7 @@ void DevInfo::parse()
         version_ = document["version"].GetString();
         bleName_ = document["bleName"].GetString();
         waddr_ = document["waddr"].GetString();
+        mode_ = document["mode"].GetString();
     }  else {
         ifs_.close();
     }
@@ -265,6 +296,51 @@ void AwsCertParser::parseDocument(const rapidjson::Value& doc)
         }
     } else {
         HJ_ERROR("doc not object\n");
+    }
+}
+
+CountDownLatch::CountDownLatch(int cnt):
+    count_(cnt)
+{
+
+}
+
+int CountDownLatch::getCountDown()
+{
+    std::unique_lock<std::mutex> lc(mtx_);
+    return count_;
+}
+
+void CountDownLatch::countDown() 
+{
+    std::unique_lock<std::mutex> lc(mtx_);
+    --count_;
+    if (count_ == 0) {
+        cond_.notify_all();
+    }
+}
+
+void CountDownLatch::resetCount(int cnt)
+{
+    std::unique_lock<std::mutex> lc(mtx_);
+    count_ = cnt;
+}
+
+bool CountDownLatch::await(bool wait) {
+    std::cv_status st = std::cv_status::no_timeout;
+    std::unique_lock<std::mutex> lc(mtx_);
+    if (count_ > 0) {
+      if (!wait) {
+        st = cond_.wait_for(lc, std::chrono::seconds(15));
+      } else {
+        cond_.wait(lc);
+      }
+    }
+
+    if (!wait) {
+        return st == std::cv_status::no_timeout;
+    } else {
+        return true;
     }
 }
 
@@ -336,7 +412,12 @@ std::string Curl::getError() const
 {
     return std::string(curl_easy_strerror(curlCode_));
 }
- 
+
+std::string Curl::getErrorByCode(int code)
+{
+    return std::string(curl_easy_strerror(static_cast<CURLcode>(code)));
+}
+
 bool Curl::post(std::string data)
 {
     if (url_.empty())

@@ -16,6 +16,7 @@
 #include "node_cache.h"
 #include "status_code.h"
 #include "std_msgs/Bool.h"
+#include "std_msgs/Float64.h"
 #include "hj_interface/Mag.h"
 #include "hj_interface/HealthCheckCode.h"
 
@@ -36,18 +37,25 @@ class Magnetometer : public hj_bf::Function {
   void LoopFunc(const hj_bf::HJTimerEvent &);
   void RestartCallback(const std_msgs::Bool::ConstPtr& msg);
   bool Start();
+  bool CheckDataReady();
+  void TimeDiffCallback(const std_msgs::Float64::ConstPtr& msg);
+  ros::Time GetTimeNow();
+  bool modulePowerManage(bool is_power_on);
 
  private:
   bool init_status_{false};  // 初始化状态
   bool status_{true};  // 获取数据状态
   int error_count_{0};
+  int module_restart_flag_{0};  // 模块重启标志位
   uint32_t frequency_{10};  // 采样频率
+  std::atomic<double> time_diff_{0.0};  // system time and RTC time diff
   hj_bf::HJPublisher mag_pub_;
   hj_bf::HJSubscriber restart_sub_;
   hj_bf::HJTimer loop_timer_;
   hj_interface::Mag mag_msg_;
   hj_bf::I2C i2c_{DEV_PATH};
   hj_interface::HealthCheckCode srv_msg_;
+  hj_bf::HJSubscriber sub_time_diff_;
 };
 }  // namespace collect_node_magnetometer
 

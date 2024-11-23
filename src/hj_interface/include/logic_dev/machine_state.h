@@ -37,6 +37,7 @@ smart_enum_class(MachineState,
                  exitStandingby, // 退出待机中(有桩)
                  sleep,          // 睡眠中
                  pairNetwork,    // 配网中
+                 remoteCtrl,     // 云平台远程控制中
 );
 
 smart_enum_class(MachineEvent,
@@ -45,7 +46,7 @@ smart_enum_class(MachineEvent,
                  callback,     // 召回
                  backCharge,   // 回充
                  toCharge,     // 转充电
-                 charge,       // 充电
+                //  charge,       // 充电
                  toExitCharge, // 退出充电
                  update,       // 软件更新
                  autoRun,      // 自动运行
@@ -65,7 +66,8 @@ smart_enum_class(MachineEvent,
                  outOfWater,   // 出水
                  toIdel,       // 进入空闲
                  toSleep,      // 进入睡眠
-                 toPairNetwork // 配网
+                 toPairNetwork,// 配网
+                 toRemoteCtrl  // 云平台远程控制
 );
 
 static std::unordered_map<MachineState, std::string> state_enum_to_str_map = {
@@ -91,8 +93,9 @@ static std::unordered_map<MachineState, std::string> state_enum_to_str_map = {
     {MachineState::manuMoving, "manuMoving"},
     {MachineState::idel, "idel"},
     {MachineState::sleep, "sleep"},
-    {MachineState::pairNetwork, "pairNetwork"}
+    {MachineState::pairNetwork, "pairNetwork"},
     //   {MachineState::outOfWatering, "outOfWatering"}
+    {MachineState::remoteCtrl, "remoteCtrl"}
 };
 
 static std::unordered_map<MachineEvent, std::string> event_enum_to_str_map = {
@@ -100,7 +103,7 @@ static std::unordered_map<MachineEvent, std::string> event_enum_to_str_map = {
     {MachineEvent::virManuMove, "virManuMove"},
     {MachineEvent::callback, "callback"},
     {MachineEvent::toCharge, "toCharge"},
-    {MachineEvent::charge, "charge"},
+    // {MachineEvent::charge, "charge"},
     {MachineEvent::toExitCharge, "toExitCharge"},
     {MachineEvent::update, "update"},
     {MachineEvent::autoRun, "autoRun"},
@@ -120,7 +123,8 @@ static std::unordered_map<MachineEvent, std::string> event_enum_to_str_map = {
     {MachineEvent::outOfWater, "outOfWater"},
     {MachineEvent::toIdel, "toIdel"},
     {MachineEvent::toSleep, "toSleep"},
-    {MachineEvent::toPairNetwork, "toPairNetwork"}};
+    {MachineEvent::toPairNetwork, "toPairNetwork"},
+    {MachineEvent::toRemoteCtrl, "toRemoteCtrl"}};
 
 static std::unordered_map<std::string, MachineState> state_str_to_enum_map = {
     {"booting", MachineState::booting},
@@ -145,8 +149,9 @@ static std::unordered_map<std::string, MachineState> state_str_to_enum_map = {
     {"manuMoving", MachineState::manuMoving},
     {"idel", MachineState::idel},
     {"sleep", MachineState::sleep},
-    {"pairNetwork", MachineState::pairNetwork}
+    {"pairNetwork", MachineState::pairNetwork},
     //   {"outOfWatering", MachineState::outOfWatering}
+    {"remoteCtrl", MachineState::remoteCtrl}
 };
 
 static std::unordered_map<std::string, MachineEvent> event_str_to_enum_map = {
@@ -154,7 +159,7 @@ static std::unordered_map<std::string, MachineEvent> event_str_to_enum_map = {
     {"virManuMove", MachineEvent::virManuMove},
     {"callback", MachineEvent::callback},
     {"toCharge", MachineEvent::toCharge},
-    {"charge", MachineEvent::charge},
+    // {"charge", MachineEvent::charge},
     {"toExitCharge", MachineEvent::toExitCharge},
     {"update", MachineEvent::update},
     {"autoRun", MachineEvent::autoRun},
@@ -174,7 +179,8 @@ static std::unordered_map<std::string, MachineEvent> event_str_to_enum_map = {
     {"outOfWater", MachineEvent::outOfWater},
     {"toIdel", MachineEvent::toIdel},
     {"toSleep", MachineEvent::toSleep},
-    {"toPairNetwork", MachineEvent::toPairNetwork}};
+    {"toPairNetwork", MachineEvent::toPairNetwork},
+    {"toRemoteCtrl", MachineEvent::toRemoteCtrl}};
 
 static std::unordered_map<MachineState, MachineEvent> state_to_event_map = {
     {MachineState::booting, MachineEvent::reboot},
@@ -182,9 +188,9 @@ static std::unordered_map<MachineState, MachineEvent> state_to_event_map = {
     {MachineState::updating, MachineEvent::update},
     {MachineState::shuttingDown, MachineEvent::shutdown},
     {MachineState::callingBack, MachineEvent::callback},
-    {MachineState::backingCharge, MachineEvent::toCharge},
+    // {MachineState::backingCharge, MachineEvent::toCharge},
     {MachineState::docking, MachineEvent::autoRun},
-    {MachineState::charging, MachineEvent::charge},
+    {MachineState::charging, MachineEvent::toCharge},
     {MachineState::exitingCharge, MachineEvent::toExitCharge},
     {MachineState::undocking, MachineEvent::autoRun},
     {MachineState::running, MachineEvent::autoRun},
@@ -197,8 +203,39 @@ static std::unordered_map<MachineState, MachineEvent> state_to_event_map = {
     {MachineState::manuMoving, MachineEvent::phyManuMove},
     {MachineState::idel, MachineEvent::toIdel},
     {MachineState::sleep, MachineEvent::toSleep},
-    {MachineState::pairNetwork, MachineEvent::toPairNetwork}
+    {MachineState::pairNetwork, MachineEvent::toPairNetwork},
     //   {MachineState::outOfWatering, MachineEvent::outOfWater}
+    {MachineState::remoteCtrl, MachineEvent::toRemoteCtrl}
+};
+
+static std::unordered_map<MachineEvent, MachineState> event_to_state_map = {
+    {MachineEvent::reboot, MachineState::booting},
+    {MachineEvent::resetFactory, MachineState::factoryResetting},
+    {MachineEvent::update, MachineState::updating},
+    {MachineEvent::shutdown, MachineState::shuttingDown},
+    {MachineEvent::callback, MachineState::callingBack},
+    {MachineEvent::backCharge, MachineState::backingCharge},
+    // {MachineEvent::toCharge, MachineState::backingCharge},
+    // {MachineEvent::autoRun, MachineState::docking},
+    {MachineEvent::toCharge, MachineState::charging},
+    {MachineEvent::toExitCharge, MachineState::exitingCharge},
+    // {MachineEvent::autoRun, MachineState::undocking},
+    {MachineEvent::autoRun, MachineState::running},
+    // {MachineEvent::suspend, MachineState::suspending},
+    {MachineEvent::abort, MachineState::idel},
+    {MachineEvent::toAlarm, MachineState::alarming},
+    {MachineEvent::clearAlarm, MachineState::idel},
+    // {MachineEvent::buildMap, MachineState::mapBuilding},
+    {MachineEvent::toMoored, MachineState::mooring},
+    {MachineEvent::toStandby, MachineState::standingby},
+    //   {MachineEvent::toStandby, MachineState::exitStandingby},
+    {MachineEvent::phyManuMove, MachineState::manuMoving},
+    {MachineEvent::toIdel, MachineState::idel},
+    {MachineEvent::toSleep, MachineState::sleep},
+    {MachineEvent::toPairNetwork, MachineState::pairNetwork},
+    {MachineEvent::outOfWater, MachineState::standingby},
+    //   {MachineEvent::outOfWater, MachineState::outOfWatering}
+    {MachineEvent::toRemoteCtrl, MachineState::remoteCtrl}
 };
 
 enum class ReportAppStatue {

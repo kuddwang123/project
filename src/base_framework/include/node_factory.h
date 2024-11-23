@@ -20,6 +20,18 @@
 #include <boost/stacktrace.hpp>
 
 namespace hj_bf {
+  constexpr char g_node_config_file_env_set[] = "HJ_NODE_CONFIG_FILE";
+struct NodeConfig {
+  bool all_log_close;
+  bool node_log_close;
+  int node_threads;
+  std::string log_config_path;
+  std::string so_path;
+  std::string value_str;
+  std::string node_name;
+  std::vector<unsigned char> crypt_val;
+};
+void readConfigure(const std::string &config_file_name, std::shared_ptr<struct NodeConfig> out_config) ;
 class HJPublisher {
  public:
   HJPublisher(const std::string& topic, const std::shared_ptr<ros::Publisher>& pub, uint32_t index)
@@ -85,7 +97,8 @@ class HJClient {
   void shutdown() = delete;
   std::string getService() const { return name_; };
   bool isValid() const;
-
+  bool exists(); 
+  bool waitForExistence(const double us);
  private:
   std::shared_ptr<ros::ServiceClient> client_ptr_;
   std::string name_;
@@ -133,6 +146,31 @@ class HJTimer {
   std::shared_ptr<ros::Timer> timer_ptr_;
   std::string name_;
 };
+
+class HJSteadyTimer {
+ public:
+  HJSteadyTimer(const double us, const std::shared_ptr<ros::SteadyTimer>& timer, const std::string& name)
+      : duration_(us), timer_ptr_(timer), name_(name) {}
+  HJSteadyTimer() {}
+  HJSteadyTimer(const HJSteadyTimer&) = default;
+  HJSteadyTimer(HJSteadyTimer&&) = default;
+  HJSteadyTimer& operator=(const HJSteadyTimer&) = default;
+  HJSteadyTimer& operator=(HJSteadyTimer&&) = default;
+  ~HJSteadyTimer();
+
+  void shutdown() = delete;
+  std::string getName() { return name_; }
+  void start();
+  void stop();
+  void setPeriod(const double us);
+  bool hasPending();
+
+ private:
+  double duration_;
+  std::shared_ptr<ros::SteadyTimer> timer_ptr_;
+  std::string name_;
+};
+
 class HighResolutionTimer {
  public:
   HighResolutionTimer() : running_(false), interval_(0), callback_(nullptr) {}
@@ -148,17 +186,23 @@ class HighResolutionTimer {
 };
 
 typedef ros::TimerEvent HJTimerEvent;
+typedef ros::SteadyTimerEvent HJSteadyTimerEvent;
 typedef std::function<void(const HJTimerEvent&)> HJTimerCallback;
+typedef std::function<void(const HJSteadyTimerEvent&)> HJSteadyTimerCallback;
 template <class T>
 HJPublisher HJAdvertise(const std::string& topic, uint32_t queue_size, bool latch = false);
 template <class T>
 HJTimer HJCreateTimer(const std::string name, double us, void (T::*callback)(const HJTimerEvent&), T* obj,
                       bool autostart = true);
+template <class T>
+HJSteadyTimer HJCreateSteadyTimer(const std::string name, double us, void (T::*callback)(const HJSteadyTimerEvent&), T* obj,
+                      bool oneshot = false, bool autostart = true);
 
 class ManagerNode {
  public:
-  static void createInstance(uint32_t thread_count);
-  friend void nodeInit(int argc, char** argv, const std::string& node_name, uint32_t thread_count, uint32_t ops);
+  static void createInstance(const std::shared_ptr<struct NodeConfig>& in_config);
+  friend void nodeInstance();
+  friend void nodeInit(int argc, char** argv, const std::string& node_name, const std::shared_ptr<struct NodeConfig>& in_config, uint32_t ops);
   friend void nodeStart();
   friend void nodeSpin();
   friend void getConfigure(const std::string& file, const std::string& so_path);
@@ -185,6 +229,11 @@ class ManagerNode {
   template <class MReq, class MRes, class T>
   friend HJServer HJCreateServer(const std::string& service, bool (T::*srv_func)(MReq&, MRes&), T* obj);
 
+  friend HJSteadyTimer HJCreateSteadyTimer(const std::string name, double us, const HJSteadyTimerCallback& callback,
+                                            bool oneshot, bool autostart);
+  template <class T>
+  friend HJSteadyTimer HJCreateSteadyTimer(const std::string name, double us, void (T::*callback)(const HJSteadyTimerEvent&), T* obj,
+                                           bool oneshot, bool autostart);
   friend HJTimer HJCreateTimer(const std::string name, double us, const HJTimerCallback& callback, bool autostart);
   template <class T>
   friend HJTimer HJCreateTimer(const std::string name, double us, void (T::*callback)(const HJTimerEvent&), T* obj,
@@ -199,6 +248,7 @@ class ManagerNode {
   friend void deleteClient(const std::string& service_name, uint32_t index);
   friend void deleteServer(const std::string& service_name);
   friend void deleteTimer(const std::string& timer_name);
+  friend void deleteSteadyTimer(const std::string& timer_name);
   friend uint32_t getNumPublisher(const std::string topic);
   friend uint32_t getNumSubscriber(const std::string topic);
   friend uint32_t getAllPublisher();
@@ -218,7 +268,7 @@ class ManagerNode {
   struct ManagerParam;
 
  private:
-  explicit ManagerNode(uint32_t thread_count);
+  explicit ManagerNode(const std::shared_ptr<struct NodeConfig>& in_config);
   HJPublisher CreatePublisher(const std::string& topic, const std::string& msg_type_name,
                               std::shared_ptr<ros::Publisher> publisher_ptr);
   HJSubscriber CreateSubscriber(const std::string& topic, std::shared_ptr<ros::Subscriber> subscriber_ptr);
@@ -228,6 +278,7 @@ class ManagerNode {
   std::shared_ptr<ros::NodeHandle> node_handle_ptr_;
   std::unordered_map<std::string, std::unique_ptr<Function>> hj_functions_;
   ros::AsyncSpinner spinner_;
+  std::shared_ptr<struct NodeConfig> config_ptr_;
 };
 
 extern ManagerNode* g_manager_node_ptr;
@@ -296,6 +347,16 @@ HJTimer HJCreateTimer(const std::string name, double us, void (T::*callback)(con
   return HJCreateTimer(name, us, callback_temp, autostart);
 }
 
+HJSteadyTimer HJCreateSteadyTimer(const std::string name, double us, const HJSteadyTimerCallback& callback,
+                              bool oneshot = false, bool autostart = true);
+
+template <class T>
+HJSteadyTimer HJCreateSteadyTimer(const std::string name, double us, void (T::*callback)(const HJSteadyTimerEvent&), T* obj,
+                      bool oneshot, bool autostart) {
+  HJSteadyTimerCallback callback_temp = std::bind(callback, obj, std::placeholders::_1);
+  return HJCreateSteadyTimer(name, us, callback_temp, oneshot, autostart);
+}
+
 /**/
 
 template <typename T>
@@ -306,7 +367,8 @@ template <typename T>
 void HJSetParam(const std::string& key, T& param_val) {
   g_manager_node_ptr->node_handle_ptr_->setParam(key, param_val);
 }
-void nodeInit(int argc, char** argv, const std::string& node_name, uint32_t thread_count, uint32_t ops);
+void nodeInit(int argc, char** argv, const std::string& node_name, const std::shared_ptr<struct NodeConfig>& in_config, uint32_t ops);
+void nodeInstance();
 void getConfigure(const std::string& file, const std::string& so_path);
 void nodeStart();
 void nodeSpin();
@@ -324,6 +386,7 @@ uint32_t getNumClient(const std::string topic);
 uint32_t getAllClient();
 
 uint32_t getNumTimer();
+bool ok();
 typedef ros::Time HJTime;
 
 void handler(int signo);

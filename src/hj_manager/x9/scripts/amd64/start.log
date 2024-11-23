@@ -1,0 +1,22 @@
+BigdataCollection constructor
+log4cxx: No appender could be found for logger (ros.base_framework).
+log4cxx: Please initialize the log4cxx system properly.
+BigdataCollection here
+getVariable have not name :iot online status
+minos tttttttt:0 4  0
+wangqing close:
+getVariable have not name :bigdata init status
+open so dir fail!
+terminate called after throwing an instance of 'std::runtime_error'
+  what():  open so dir fail!
+BigdataCollection constructor
+log4cxx: No appender could be found for logger (ros.base_framework).
+log4cxx: Please initialize the log4cxx system properly.
+BigdataCollection here
+getVariable have not name :iot online status
+minos tttttttt:0 4  0
+wangqing close:
+getVariable have not name :bigdata init status
+open so dir fail!
+terminate called after throwing an instance of 'std::runtime_error'
+  what():  open so dir fail!

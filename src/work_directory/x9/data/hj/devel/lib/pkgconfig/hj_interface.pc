@@ -1,8 +1,8 @@
-prefix=/home/clayderman/workspace/temp/platfrom/devel
+prefix=/home/wangqing/work_space/hj_workspace/devel
 
 Name: hj_interface
 Description: Description of hj_interface
 Version: 0.1.0
-Cflags: -I/home/clayderman/workspace/temp/platfrom/devel/include
+Cflags: -I/home/wangqing/work_space/hj_workspace/devel/include
 Libs: -L${prefix}/lib 
 Requires: message_runtime std_msgs geometry_msgs

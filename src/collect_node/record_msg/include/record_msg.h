@@ -39,6 +39,7 @@
 #include "hj_interface/DownLeft.h"
 #include "hj_interface/DownRight.h"
 #endif
+#include "hj_interface/Atime.h"
 
 
 #define FILE_POLLING_WRITES_ENABLED  (0)  // 0: 关闭文件轮询写入 1: 开启文件轮询写入
@@ -79,14 +80,18 @@ class RecordMsg : public hj_bf::Function {
   void PumpMotorSpeedCallback(const hj_interface::PumpMotorSpeed::ConstPtr&);
   void FanMotorSpeedCallback(const hj_interface::FanMotorSpeed::ConstPtr&);
   void OutWaterCallback(const std_msgs::UInt8::ConstPtr&);
+  void WriteMotor(const hj_interface::Atime::ConstPtr&);
+  void WriteImu(const hj_interface::Atime::ConstPtr&);
  private:
   bool writing_enabled_{true};  // true: 写入normalfile  false: 写入bakfile
   int space_limit_{30};  // 磁盘空间最小要求，MB
-  std::string machine_version_{"P3"};
+  std::string machine_version_{"P3.5"};
   std::unordered_map<std::string, bool> topics_;
   bool record_all_topics_{false};
   int fd_motor_{-1};
   int fd_imu_{-1};
+  int fd_motor_time_{-1};
+  int fd_imu_time_{-1};
   int fd_soc_imu_{-1};
   int fd_triple_ultra_{-1};
   int fd_mag_{-1};
@@ -141,6 +146,8 @@ int fd_down_ray_{-1};
   hj_bf::HJSubscriber sub_down_left_;
   hj_bf::HJSubscriber sub_down_right_;
 #endif
+  hj_bf::HJSubscriber imu_time_sub_;
+  hj_bf::HJSubscriber motor_tmie_sub_;
 };
 }  // namespace collect_node_record_msg
 

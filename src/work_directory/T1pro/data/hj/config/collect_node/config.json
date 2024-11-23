@@ -1,0 +1,95 @@
+{
+  "so_dir":"/data/hj/lib",
+  "log_path_config":"/data/hj/config/hj_log.config",
+  "all_log_close":true,
+  "node_log_close":false,
+  "node_name":"collect_node",
+  "node_threads":4,
+  "functions": [
+      {
+        "ID": "core_dump",
+        "name": "core_dump",
+        "dump_path": "/userdata/hj/log/core_dump/dump_collect_node"
+      },
+      {
+        "ID": "log_redirect",
+        "name": "log_redirect",
+        "err_log_file_path": "/userdata/hj/log/logging/",
+        "cout_log_file_path": ""
+      },
+      {
+        "ID": "magnetometers",
+        "name": "magnetometers",
+        "frequency": 10
+      },
+      {
+        "ID": "ulsound",
+        "name": "ulsound",
+        "front_dev": "/dev/ttyS5",
+        "machine_version": "T1pro_v2"
+      },
+      {
+        "ID": "pressure",
+        "name": "pressure",
+        "pressure": 1000
+      },
+      {
+        "ID": "mcu",
+        "name": "mcu",
+        "machine_version": "T1pro_v2",
+        "enable_keylog":1,
+        "mcu_para":{
+          "port":"/dev/ttyS0",
+          "baudRate":500000,
+          "flowCtl":0,
+          "dataBits":8,
+          "stopBits":1,
+          "parity":"N"
+        }
+      },
+      {
+        "ID": "self_check",
+        "name": "self_check"
+      },
+      {
+        "ID": "mcuota",
+        "name": "mcuota",
+        "log":"/userdata/hj/log/mcuota.log",
+        "mcu_para":{
+          "port":"/dev/ttyS0",
+          "baudRate":500000,
+          "flowCtl":0,
+          "dataBits":8,
+          "stopBits":1,
+          "parity":"N"
+        }
+      },
+      {
+        "ID": "iot",
+        "name": "iot",
+        "tcpPort":8888,
+        "projectName": "T1pro"
+      },
+      {
+        "ID": "utils_func",
+        "name": "utils_func",
+        "record_param_alg": {
+          "enable": 1,
+          "task_enable": 1,
+          "dir":"/userdata/hj/log/sensor_data_alg",
+          "space_limit": 200
+        },
+        "record_param_other": {
+          "enable": 1,
+          "dir":"/userdata/hj/log/sensor_data_other",
+          "space_limit": 10
+        }
+      },
+      {
+        "ID": "posttunnel",
+        "name": "posttunnel",
+        "queueSize":100,
+        "loadFailSec":60
+      }
+  ]
+}

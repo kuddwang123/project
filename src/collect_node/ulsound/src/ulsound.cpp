@@ -16,7 +16,10 @@
 #include <sys/prctl.h>
 #include <thread>
 #include <queue>
+#include <deque>
 #include "log.h"
+#include <unistd.h>
+#include "shm_interface.h"
 
 
 HJ_REGISTER_FUNCTION(factory) {
@@ -82,192 +85,106 @@ void Ulsound::PushDownError() {
   }
 }
 
-void Ulsound::ReadFront() {  // 串口发送线程函数
-  prctl(PR_SET_NAME, "ulsound_readFront");
+void Ulsound::ReadFront(const hj_bf::HJTimerEvent &) {  // 串口发送线程函数
   uint8_t senddata = 0x10;
   int ret = 0;
-  u_int8_t read_size = 8;   // 读取的字节数
-  std::queue<uint8_t> data_queue;
-  while (true) {
-    // read front
-    ret = write(front_uart_.GetFd(), &senddata, 1);
-    if (ret > 0) {
-      ret = read(front_uart_.GetFd(), &(front_data_.databuf[0]), read_size);
-      if (ret > 0 && (ret % read_size) == 0) {
+  u_int8_t read_size = 64;   // 读取的字节数, 64个字节:模组断电上电，有概率造成一帧数据被截断
+  static std::queue<uint8_t> data_queue;
+  int module_restart_flag = 0;
+  bool res = hj_bf::getVariable("module_restart_flag", module_restart_flag);
+  if (res && module_restart_flag != 0) {
+    usleep(300000);  // 等待300ms,等待模块重启完成
+    return;
+  }
+  // read front
+  ret = write(front_uart_.GetFd(), &senddata, 1);
+  if (ret > 0) {
+    ret = read(front_uart_.GetFd(), &(front_data_.databuf[0]), read_size);
+    if (ret > 0 && (ret % 8) == 0) {
+      if (front_data_.databuf[7] ==
+          ((front_data_.databuf[0] + front_data_.databuf[1] + front_data_.databuf[2] + front_data_.databuf[3] +
+            front_data_.databuf[4] + front_data_.databuf[5] + front_data_.databuf[6]) & 0xff)) {
+        triple_ultra_msg_.front_l = front_data_.databuf[5] * 256 + front_data_.databuf[6];
+        triple_ultra_msg_.front_m = front_data_.databuf[3] * 256 + front_data_.databuf[4];
+        triple_ultra_msg_.front_r = front_data_.databuf[1] * 256 + front_data_.databuf[2];
+        triple_ultra_msg_.status = 0;
+        triple_ultra_msg_.timestamp = GetTimeNow();
+        front_error_count_ = 0;
+        triple_ultra_pub_.publish(triple_ultra_msg_);
+        PushFrontError();
+      } else {
+        triple_ultra_msg_.timestamp = GetTimeNow();
+        triple_ultra_msg_.status = 1;
+        triple_ultra_pub_.publish(triple_ultra_msg_);
+        HJ_ERROR("front sum error, status:%x", triple_ultra_msg_.status);
+        PushFrontError();
+        front_error_count_++;
+      }
+      while (!data_queue.empty()) {  // 正常数据，清空缓存的异常数据
+        data_queue.pop();
+      }
+    } else if (ret == 0) {
+      triple_ultra_msg_.timestamp = GetTimeNow();
+      triple_ultra_msg_.status = 1;
+      triple_ultra_msg_.front_l = 65535;
+      triple_ultra_msg_.front_m = 65535;
+      triple_ultra_msg_.front_r = 65535;
+      triple_ultra_pub_.publish(triple_ultra_msg_);
+      PushFrontError();
+      front_error_count_++;
+    } else {  // 未读取到8个字节，缓存拼接
+      for (int i = 0; i < ret; i++) {
+        data_queue.push(front_data_.databuf[i]);
+      }
+      // 帧头数据固定为0xff，如果读取不到0xff则丢弃
+      while (!data_queue.empty() && data_queue.front() != 0xff) {
+        data_queue.pop();
+      }
+      if (data_queue.size() >= read_size) {
+        for (int i = 0; i < read_size; i++) {
+          front_data_.databuf[i] = data_queue.front();
+          data_queue.pop();
+        }
         if (front_data_.databuf[7] ==
             ((front_data_.databuf[0] + front_data_.databuf[1] + front_data_.databuf[2] + front_data_.databuf[3] +
               front_data_.databuf[4] + front_data_.databuf[5] + front_data_.databuf[6]) & 0xff)) {
-          triple_ultra_msg_.front_l = front_data_.databuf[1] * 256 + front_data_.databuf[2];
+          triple_ultra_msg_.front_l = front_data_.databuf[5] * 256 + front_data_.databuf[6];
           triple_ultra_msg_.front_m = front_data_.databuf[3] * 256 + front_data_.databuf[4];
-          triple_ultra_msg_.front_r = front_data_.databuf[5] * 256 + front_data_.databuf[6];
+          triple_ultra_msg_.front_r = front_data_.databuf[1] * 256 + front_data_.databuf[2];
           triple_ultra_msg_.status = 0;
-          triple_ultra_msg_.timestamp = hj_bf::HJTime::now();
+          triple_ultra_msg_.timestamp = GetTimeNow();
           front_error_count_ = 0;
           triple_ultra_pub_.publish(triple_ultra_msg_);
           PushFrontError();
+          HJ_INFO("splicing front OK");
         } else {
-          triple_ultra_msg_.timestamp = hj_bf::HJTime::now();
+          triple_ultra_msg_.timestamp = GetTimeNow();
           triple_ultra_msg_.status = 1;
           triple_ultra_pub_.publish(triple_ultra_msg_);
-          HJ_ERROR("front sum error, status:%x", triple_ultra_msg_.status);
+          if (front_error_count_ < ERROR_COUNT) {
+            HJ_ERROR("splicing front check error, status:%x", triple_ultra_msg_.status);
+          }
           PushFrontError();
           front_error_count_++;
         }
-        while (!data_queue.empty()) {  // 正常数据，清空缓存的异常数据
-          data_queue.pop();
-        }
-      } else {  // 未读取到8个字节，缓存拼接
-        for (int i = 0; i < ret; i++) {
-          data_queue.push(front_data_.databuf[i]);
-        }
-        // 帧头数据固定为0xff，如果读取不到0xff则丢弃
-        while (!data_queue.empty() && data_queue.front() != 0xff) {
-          data_queue.pop();
-        }
-        if (data_queue.size() >= read_size) {
-          for (int i = 0; i < read_size; i++) {
-            front_data_.databuf[i] = data_queue.front();
-            data_queue.pop();
-          }
-          if (front_data_.databuf[7] ==
-              ((front_data_.databuf[0] + front_data_.databuf[1] + front_data_.databuf[2] + front_data_.databuf[3] +
-                front_data_.databuf[4] + front_data_.databuf[5] + front_data_.databuf[6]) & 0xff)) {
-            triple_ultra_msg_.front_l = front_data_.databuf[1] * 256 + front_data_.databuf[2];
-            triple_ultra_msg_.front_m = front_data_.databuf[3] * 256 + front_data_.databuf[4];
-            triple_ultra_msg_.front_r = front_data_.databuf[5] * 256 + front_data_.databuf[6];
-            triple_ultra_msg_.status = 0;
-            triple_ultra_msg_.timestamp = hj_bf::HJTime::now();
-            front_error_count_ = 0;
-            triple_ultra_pub_.publish(triple_ultra_msg_);
-            PushFrontError();
-            HJ_INFO("splicing front OK");
-          } else {
-            triple_ultra_msg_.timestamp = hj_bf::HJTime::now();
-            triple_ultra_msg_.status = 1;
-            triple_ultra_pub_.publish(triple_ultra_msg_);
-            HJ_ERROR("splicing front check error, status:%x", triple_ultra_msg_.status);
-            PushFrontError();
-            front_error_count_++;
-          }
-        }
-        front_error_count_++;
-        PushFrontError();
-        HJ_INFO("recv triple error: %d,  status:%x, databuf [%d,%d,%d,%d,%d,%d,%d,%d]", ret, triple_ultra_msg_.status,
-                front_data_.databuf[0], front_data_.databuf[1], front_data_.databuf[2], front_data_.databuf[3],
-                front_data_.databuf[4], front_data_.databuf[5], front_data_.databuf[6], front_data_.databuf[7]);
       }
-    } else {
-      triple_ultra_msg_.timestamp = hj_bf::HJTime::now();
-      triple_ultra_msg_.status = 1;
-      triple_ultra_pub_.publish(triple_ultra_msg_);
-      HJ_ERROR("send front error!,status:%x", triple_ultra_msg_.status);
-      PushFrontError();
       front_error_count_++;
-    }
-  }
-}
-
-void Ulsound::ReadSide() {  // 串口发送线程函数
-  prctl(PR_SET_NAME, "ulsound_readSide");
-  uint8_t sw_to_b = 1, sw_to_f = 0;
-  uint8_t senddata = 0x10;
-  int ret = 0;
-  while (true) {
-    usleep(1*1000);
-    // system(SWITCH_TO_J165);
-    ret = write(side_switch_fd_, &sw_to_b, sizeof(char));
-    if (ret < 0) {
-      HJ_ERROR("switch sw_to_b error: %d\n", ret);
-    }
-    usleep(1*1000);
-    // read left uss J165
-    ret = write(side_uart_.GetFd(), &senddata, 1);
-    if (ret > 0) {
-      ret = read(side_uart_.GetFd(), &(rec_data_.databuf[10]), 8);
-      if (ret > 0 && (ret % 4) ==0) {
-        if (rec_data_.databuf[13] ==
-            ((rec_data_.databuf[10] + rec_data_.databuf[11] + rec_data_.databuf[12]) & 0xff)) {
-          left_back_msg_.dist = rec_data_.databuf[11] * 256 + rec_data_.databuf[12];
-          left_back_msg_.timestamp = hj_bf::HJTime::now();
-          left_back_msg_.status = 0;
-          left_back_pub_.publish(left_back_msg_);
-          side_back_error_count_ = 0;
-          PushSideBackError();
-        } else {
-          left_back_msg_.timestamp = hj_bf::HJTime::now();
-          left_back_msg_.status = 1;
-          left_back_pub_.publish(left_back_msg_);
-          HJ_ERROR("left uss J165 sum error,%d, [%d,%d,%d], status=%x",
-                  rec_data_.databuf[13], rec_data_.databuf[10],
-                  rec_data_.databuf[11], rec_data_.databuf[12], left_back_msg_.status);
-          PushSideBackError();
-          side_back_error_count_++;
-        }
-      } else {
-        left_back_msg_.timestamp = hj_bf::HJTime::now();
-        left_back_msg_.status = 1;
-        left_back_pub_.publish(left_back_msg_);
-        HJ_ERROR("recv left uss J165 error %d, status=%x, [%d,%d,%d,%d]", ret, left_back_msg_.status,
-                rec_data_.databuf[10], rec_data_.databuf[11], rec_data_.databuf[12], rec_data_.databuf[13]);
-        PushSideBackError();
-        side_back_error_count_++;
+      PushFrontError();
+      if (front_error_count_ < ERROR_COUNT) {
+        HJ_INFO("recv triple error: %d,  status:%x, databuf [%d,%d,%d,%d,%d,%d,%d,%d]", ret, triple_ultra_msg_.status,
+              front_data_.databuf[0], front_data_.databuf[1], front_data_.databuf[2], front_data_.databuf[3],
+              front_data_.databuf[4], front_data_.databuf[5], front_data_.databuf[6], front_data_.databuf[7]);
       }
-    } else {
-      left_back_msg_.timestamp = hj_bf::HJTime::now();
-      left_back_msg_.status = 1;
-      left_back_pub_.publish(left_back_msg_);
-      HJ_ERROR("send left uss J165 error!,status=%x", left_back_msg_.status);
-      PushSideBackError();
-      side_back_error_count_++;
     }
-
-    // 1:J171, 0:J165
-    /* 收发完以后切换一定要加延迟 */
-    usleep(1*1000);
-    ret = write(side_switch_fd_, &sw_to_f, sizeof(char));
-    if (ret < 0) {
-      HJ_ERROR("switch sw_to_f error: %d\n", ret);
+  } else {
+    triple_ultra_msg_.timestamp = GetTimeNow();
+    triple_ultra_msg_.status = 1;
+    triple_ultra_pub_.publish(triple_ultra_msg_);
+    if (front_error_count_ < ERROR_COUNT) {
+      HJ_ERROR("send front error!,status:%x", triple_ultra_msg_.status);
     }
-    usleep(1*1000);
-
-    // read left uss J171
-    ret = write(side_uart_.GetFd(),  &senddata, 1);
-    if (ret > 0) {
-        ret = read(side_uart_.GetFd(), &(rec_data_.databuf[20]), 8);
-        if (ret > 0 && (ret % 4 == 0)) {
-          if (rec_data_.databuf[23] ==
-              ((rec_data_.databuf[20] + rec_data_.databuf[21] + rec_data_.databuf[22]) & 0xff)) {
-            left_front_msg_.dist = rec_data_.databuf[21]*256 + rec_data_.databuf[22];
-            left_front_msg_.status = 0;
-            left_front_msg_.timestamp = hj_bf::HJTime::now();
-            left_front_pub_.publish(left_front_msg_);
-            side_front_error_count_ = 0;
-            PushSideFrontError();
-          } else {
-            left_front_msg_.timestamp = hj_bf::HJTime::now();
-            left_front_msg_.status = 1;
-            left_front_pub_.publish(left_front_msg_);
-            HJ_ERROR("left uss J171 sum error!,status=%x", left_front_msg_.status);
-            PushSideFrontError();
-            side_front_error_count_++;
-          }
-        } else {
-          left_front_msg_.timestamp = hj_bf::HJTime::now();
-          left_front_msg_.status = 1;
-          left_front_pub_.publish(left_front_msg_);
-          HJ_ERROR("recv left uss J171 error: %d, status:%x, [%d,%d,%d,%d]", ret, left_front_msg_.status,
-                  rec_data_.databuf[20], rec_data_.databuf[21], rec_data_.databuf[22], rec_data_.databuf[23]);
-          PushSideFrontError();
-          side_front_error_count_++;
-        }
-    } else {
-      left_front_msg_.timestamp = hj_bf::HJTime::now();
-      left_front_msg_.status = 1;
-      left_front_pub_.publish(left_front_msg_);
-      HJ_ERROR("send left uss J171 error!, status=%x", left_front_msg_.status);
-      PushSideFrontError();
-      side_front_error_count_++;
-    }
+    PushFrontError();
+    front_error_count_++;
   }
 }
 
@@ -275,7 +192,13 @@ void Ulsound::ReadSideFront() {
   prctl(PR_SET_NAME, "ulsound_readSideFront");
   uint8_t senddata = 0x10;
   int ret = 0;
-  while (true) {
+  int module_restart_flag = 0;
+  while (hj_bf::ok()) {
+    bool res = hj_bf::getVariable("module_restart_flag", module_restart_flag);
+    if (res && module_restart_flag != 0) {
+      usleep(300000);  // 等待300ms,等待模块重启完成
+      continue;
+    }
     ret = write(side_uart_front_.GetFd(),  &senddata, 1);
     if (ret > 0) {
       ret = read(side_uart_front_.GetFd(), &(rec_data_.databuf[20]), 8);
@@ -283,13 +206,18 @@ void Ulsound::ReadSideFront() {
         if (rec_data_.databuf[23] ==
             ((rec_data_.databuf[20] + rec_data_.databuf[21] + rec_data_.databuf[22]) & 0xff)) {
           left_front_msg_.dist = rec_data_.databuf[21]*256 + rec_data_.databuf[22];
-          left_front_msg_.status = 0;
-          left_front_msg_.timestamp = hj_bf::HJTime::now();
+          if (left_front_msg_.dist == OUTWATER_DISTANCE) {
+            left_front_msg_.status = 2;
+          } else {
+            left_front_msg_.status = 0;
+          }
+
+          left_front_msg_.timestamp = GetTimeNow();
           left_front_pub_.publish(left_front_msg_);
           side_front_error_count_ = 0;
           PushSideFrontError();
         } else {
-          left_front_msg_.timestamp = hj_bf::HJTime::now();
+          left_front_msg_.timestamp = GetTimeNow();
           left_front_msg_.status = 1;
           left_front_pub_.publish(left_front_msg_);
           HJ_ERROR("left uss J171 sum error!,status=%x", left_front_msg_.status);
@@ -297,19 +225,23 @@ void Ulsound::ReadSideFront() {
           side_front_error_count_++;
         }
       } else {
-        left_front_msg_.timestamp = hj_bf::HJTime::now();
+        left_front_msg_.timestamp = GetTimeNow();
         left_front_msg_.status = 1;
         left_front_pub_.publish(left_front_msg_);
-        HJ_ERROR("recv left uss J171 error: %d, status:%x,[%d,%d,%d,%d]", ret, left_front_msg_.status,
+        if (side_front_error_count_ < ERROR_COUNT) {
+          HJ_ERROR("recv left uss J171 error: %d, status:%x,[%d,%d,%d,%d]", ret, left_front_msg_.status,
                 rec_data_.databuf[20], rec_data_.databuf[21], rec_data_.databuf[22], rec_data_.databuf[23]);
+        }
         PushSideFrontError();
         side_front_error_count_++;
       }
     } else {
-      left_front_msg_.timestamp = hj_bf::HJTime::now();
+      left_front_msg_.timestamp = GetTimeNow();
       left_front_msg_.status = 1;
       left_front_pub_.publish(left_front_msg_);
-      HJ_ERROR("send left uss J171 error!, status=%x", left_front_msg_.status);
+      if (side_front_error_count_ < ERROR_COUNT) {
+        HJ_ERROR("send left uss J171 error!, status=%x", left_front_msg_.status);
+      }
       PushSideFrontError();
       side_front_error_count_++;
     }
@@ -320,7 +252,13 @@ void Ulsound::ReadSideBack() {
   prctl(PR_SET_NAME, "ulsound_readSideBack");
   uint8_t senddata = 0x10;
   int ret = 0;
-  while (true) {
+  int module_restart_flag = 0;
+  while (hj_bf::ok()) {
+    bool res = hj_bf::getVariable("module_restart_flag", module_restart_flag);
+    if (res && module_restart_flag != 0) {
+      usleep(300000);  // 等待300ms,等待模块重启完成
+      continue;
+    }
     ret = write(side_uart_back_.GetFd(), &senddata, 1);
     if (ret > 0) {
       ret = read(side_uart_back_.GetFd(), &(rec_data_.databuf[10]), 8);
@@ -328,35 +266,46 @@ void Ulsound::ReadSideBack() {
         if (rec_data_.databuf[13] ==
             ((rec_data_.databuf[10] + rec_data_.databuf[11] + rec_data_.databuf[12]) & 0xff)) {
           left_back_msg_.dist = rec_data_.databuf[11] * 256 + rec_data_.databuf[12];
-          left_back_msg_.timestamp = hj_bf::HJTime::now();
-          left_back_msg_.status = 0;
+          if (left_back_msg_.dist == OUTWATER_DISTANCE) {
+            left_back_msg_.status = 2;
+          } else {
+            left_back_msg_.status = 0;
+          }
+
+          left_back_msg_.timestamp = GetTimeNow();
           left_back_pub_.publish(left_back_msg_);
           side_back_error_count_ = 0;
           PushSideBackError();
         } else {
-          left_back_msg_.timestamp = hj_bf::HJTime::now();
+          left_back_msg_.timestamp = GetTimeNow();
           left_back_msg_.status = 1;
           left_back_pub_.publish(left_back_msg_);
-          HJ_ERROR("left uss J165 sum error,%d, [%d,%d,%d], status=%x",
+          if (side_back_error_count_ < ERROR_COUNT) {
+            HJ_ERROR("left uss J165 sum error,%d, [%d,%d,%d], status=%x",
                   rec_data_.databuf[13], rec_data_.databuf[10],
                   rec_data_.databuf[11], rec_data_.databuf[12], left_back_msg_.status);
+          }
           PushSideBackError();
           side_back_error_count_++;
         }
       } else {
-        left_back_msg_.timestamp = hj_bf::HJTime::now();
+        left_back_msg_.timestamp = GetTimeNow();
         left_back_msg_.status = 1;
         left_back_pub_.publish(left_back_msg_);
-        HJ_ERROR("recv left uss J165 error %d, status=%x, [%d,%d,%d,%d]", ret, left_back_msg_.status,
+        if (side_back_error_count_ < ERROR_COUNT) {
+          HJ_ERROR("recv left uss J165 error %d, status=%x, [%d,%d,%d,%d]", ret, left_back_msg_.status,
                 rec_data_.databuf[10], rec_data_.databuf[11], rec_data_.databuf[12], rec_data_.databuf[13]);
+        }
         PushSideBackError();
         side_back_error_count_++;
       }
     } else {
-      left_back_msg_.timestamp = hj_bf::HJTime::now();
+      left_back_msg_.timestamp = GetTimeNow();
       left_back_msg_.status = 1;
       left_back_pub_.publish(left_back_msg_);
-      HJ_ERROR("send left uss J165 error!,status=%x", left_back_msg_.status);
+      if (side_back_error_count_ < ERROR_COUNT) {
+        HJ_ERROR("send left uss J165 error!,status=%x", left_back_msg_.status);
+      }
       PushSideBackError();
       side_back_error_count_++;
     }
@@ -366,9 +315,17 @@ void Ulsound::ReadSideBack() {
 void Ulsound::ReadDown() {
   prctl(PR_SET_NAME, "ulsound_ReadDown");
   uint8_t senddata = 0x10;
+  u_int8_t read_size = 4;
   int ret = 0;
   uint8_t data_buffer[8] = {0};
-  while (true) {
+  std::deque<uint8_t> data_deque;
+  int module_restart_flag = 0;
+  while (hj_bf::ok()) {
+    bool res = hj_bf::getVariable("module_restart_flag", module_restart_flag);
+    if (res && module_restart_flag != 0) {
+      usleep(300000);  // 等待300ms,等待模块重启完成
+      continue;
+    }
     ret = write(down_uart_.GetFd(), &senddata, 1);
     if (ret > 0) {
       ret = read(down_uart_.GetFd(), &(data_buffer[0]), 8);
@@ -376,42 +333,83 @@ void Ulsound::ReadDown() {
         if (data_buffer[3] ==
             ((data_buffer[0] + data_buffer[1] + data_buffer[2]) & 0xff)) {
           down_right_msg_.dist = data_buffer[1] * 256 + data_buffer[2];
-          down_right_msg_.timestamp = hj_bf::HJTime::now();
-          down_right_msg_.status = 0;
-          down_left_pub_.publish(down_right_msg_);
+          if (down_right_msg_.dist == OUTWATER_DISTANCE) {
+            down_right_msg_.status = 2;
+          } else {
+            down_right_msg_.status = 0;
+          }
+          down_right_msg_.timestamp = GetTimeNow();
+          down_right_pub_.publish(down_right_msg_);
           down_error_count_ = 0;
           PushDownError();
         } else {
-          down_right_msg_.timestamp = hj_bf::HJTime::now();
+          down_right_msg_.timestamp = GetTimeNow();
           down_right_msg_.status = 1;
-          down_left_pub_.publish(down_right_msg_);
+          down_right_pub_.publish(down_right_msg_);
           HJ_ERROR("down uss sum error");
           PushDownError();
           down_error_count_++;
         }
-      } else {
-        down_right_msg_.timestamp = hj_bf::HJTime::now();
+        data_deque.clear();
+      } else if(ret == 0) {
+        down_right_msg_.timestamp = GetTimeNow();
         down_right_msg_.status = 1;
-        down_left_pub_.publish(down_right_msg_);
-        HJ_ERROR("recv down uss error %d, status=%x, [%d,%d,%d,%d]", ret, down_right_msg_.status,
-                data_buffer[0], data_buffer[1], data_buffer[2], data_buffer[3]);
+        down_right_msg_.dist = 65535;
+        down_right_pub_.publish(down_right_msg_);
         PushDownError();
         down_error_count_++;
+      } else {
+        for (int i = 0; i < ret; i++) {
+          data_deque. emplace_back(data_buffer[i]);
+        }
+        // 帧头数据固定为0xff，如果读取不到0xff则丢弃
+        while (!data_deque.empty() && data_deque.front() != 0xff) {
+          data_deque.pop_front();
+        }
+        if (data_deque.size() >= read_size) {
+          for (int i = 0; i < read_size; i++) {
+            data_buffer[i] = data_deque.front();
+            data_deque.pop_front();
+          }
+          if (data_buffer[3] ==
+            ((data_buffer[0] + data_buffer[1] + data_buffer[2]) & 0xff)) {
+            down_right_msg_.dist = data_buffer[1] * 256 + data_buffer[2];
+            down_right_msg_.timestamp = GetTimeNow();
+            down_right_msg_.status = 0;
+            down_right_pub_.publish(down_right_msg_);
+            down_error_count_ = 0;
+            PushDownError();
+            HJ_INFO("splicing front OK");
+          } else {
+            down_right_msg_.timestamp = GetTimeNow();
+            down_right_msg_.status = 1;
+            down_right_pub_.publish(down_right_msg_);
+            HJ_ERROR("splicing down check error, status:%x", down_right_msg_.status);
+            PushDownError();
+            down_error_count_++;
+          }
+        }
+        down_error_count_++;
+        PushDownError();
+        if (down_error_count_ < ERROR_COUNT) {
+          HJ_INFO("recv down_right_msg_ error: %d,  status:%x, databuf [%d,%d,%d,%d]", ret, down_right_msg_.status,
+                data_buffer[0], data_buffer[1], data_buffer[2], data_buffer[3]);
+        }
       }
     } else {
-      down_right_msg_.timestamp = hj_bf::HJTime::now();
+      down_right_msg_.timestamp = GetTimeNow();
       down_right_msg_.status = 1;
-      down_left_pub_.publish(down_right_msg_);
-      HJ_ERROR("send down uss error!,status=%x", down_right_msg_.status);
+      down_right_pub_.publish(down_right_msg_);
+      if (down_error_count_ < ERROR_COUNT) {
+        HJ_ERROR("send down uss error!,status=%x", down_right_msg_.status);
+      }
       PushDownError();
       down_error_count_++;
     }
   }
 }
 
-Ulsound::~Ulsound() {
-  close(side_switch_fd_);
-}
+Ulsound::~Ulsound() {}
 
 void Ulsound::RestartCallback(const std_msgs::Bool::ConstPtr& msg) {
   if (msg->data != 0) {
@@ -437,17 +435,17 @@ bool Ulsound::Start() {
       front_init_status_ = false;
     } else {
       front_init_status_ = true;
-      auto state = std::thread(&Ulsound::ReadFront, this);  // 开线程
-      state.detach();
+      triple_timer_ = hj_bf::HJCreateTimer("triple_ultra_timer",
+                front_uls_frequency_ * 1000, &Ulsound::ReadFront, this);
       HJ_INFO("front_init OK");
     }
   } else {
     HJ_INFO("front_init_status_ already OK");
   }
 
-  if (machine_version_ == "T1pro") {
-    HJ_INFO("T1pro machine_version_ don't have side uls");
-  } else if (machine_version_ == "P3.5") {  // 侧边超声在3.5版本上电路变化，需要单独处理
+  if (machine_version_ == "T1pro_v2") {
+    HJ_INFO("T1pro v2 machine_version_ don't have side uls");
+  } else if (machine_version_ == "P4" || machine_version_ == "T1pro_v3") {
     if (!side_front_init_status_) {
       ret = side_uart_front_.Initialize(115200, 0, 8, 1, 'N');
       ret &= side_uart_front_.LibttyRs485Set(false);
@@ -485,54 +483,58 @@ bool Ulsound::Start() {
     } else {
       HJ_INFO("side_back_init_status_ already OK");
     }
-
-    if (!down_init_status_) {
-      ret = down_uart_.Initialize(115200, 0, 8, 1, 'N');
-      ret &= down_uart_.LibttyRs485Set(false);
-      if (!ret) {
-        HJ_ERROR("down uls ret init = %d", ret);
-        srv_msg_.request.code_val = ULSOUND_DOWN_INIT_ERROR;
-        srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::FAILED;
-        hj_bf::HjPushSrv(srv_msg_);
-        down_init_status_ = false;
-      } else {
-        down_init_status_ = true;
-        auto state = std::thread(&Ulsound::ReadDown, this);  // 开线程
-        state.detach();
-        HJ_INFO("down_side ULS OK");
-      }
-    } else {
-      HJ_INFO("down_init_status_ already OK");
-    }
-  } else {  // 侧边超声在3.5版本之前，侧边超声共用一个串口
-    if (!side_init_status_) {
-      if (side_switch_fd_ < 0) {
-        side_switch_fd_ = open(SWITCH_PATH_SIDE, O_RDWR);
-        if (side_switch_fd_ < 0) {
-          HJ_ERROR("side_switch_fd_ open  failed\n");
+    if (machine_version_ == "P4") {
+      if (!down_init_status_) {
+        ret = down_uart_.Initialize(115200, 0, 8, 1, 'N');
+        ret &= down_uart_.LibttyRs485Set(false);
+        if (!ret) {
+          HJ_ERROR("down uls ret init = %d", ret);
+          srv_msg_.request.code_val = ULSOUND_DOWN_INIT_ERROR;
+          srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::FAILED;
+          hj_bf::HjPushSrv(srv_msg_);
+          down_init_status_ = false;
+        } else {
+          down_init_status_ = true;
+          auto state = std::thread(&Ulsound::ReadDown, this);  // 开线程
+          state.detach();
+          HJ_INFO("down_side ULS OK");
         }
-      }
-
-      ret = side_uart_.Initialize(115200, 0, 8, 1, 'N');
-      ret &= side_uart_.LibttyRs485Set(false);
-      if (!ret) {
-        HJ_ERROR("side uls ret init = %d", ret);
-        srv_msg_.request.code_val = ULSOUND_SIDE_MID_INIT_ERROR;
-        srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::FAILED;
-        hj_bf::HjPushSrv(srv_msg_);
-        side_init_status_ = false;
       } else {
-        side_init_status_ = true;
-        auto state = std::thread(&Ulsound::ReadSide, this);  // 开线程
-        state.detach();
-        HJ_INFO("p3 front_side ULS OK");
+        HJ_INFO("down_init_status_ already OK");
       }
-    } else {
-      HJ_INFO("side_init_status_ already OK");
     }
   }
 
   return ret;
+}
+
+void Ulsound::TimeDiffCallback(const std_msgs::Float64::ConstPtr& msg) {
+  time_diff_.store(msg->data);
+  HJ_INFO("time_diff_now:%f", msg->data);
+}
+
+ros::Time Ulsound::GetTimeNow() {
+  double time_now = ros::Time::now().toSec();
+  double time_diff = time_diff_.load() * 0.001;
+  double time_now_diff = time_now - time_diff;
+  static int error_count = 0;
+  if (time_now_diff < 0) {
+    error_count++;
+    if (error_count < 10) {
+      HJ_ERROR("time_diff_chatter error, time_now:%lf, time_diff:%lf, time_now_diff:%lf", time_now, time_diff, time_now_diff);
+    }
+    return ros::Time::now();
+  } else if (time_now_diff > std::numeric_limits<uint32_t>::max()) {
+    error_count++;
+    if (error_count < 10) {
+      HJ_ERROR("time_diff_chatter error, time_now:%lf, time_diff:%lf, time_now_diff:%lf", time_now, time_diff, time_now_diff);
+    }
+    return ros::Time::now();
+  } else {
+    error_count = 0;
+    ros::Time now_time = ros::Time().fromSec(time_now_diff);
+    return now_time;
+  }
 }
 
 Ulsound::Ulsound(const rapidjson::Value &json_conf) : hj_bf::Function(json_conf) {
@@ -547,12 +549,6 @@ Ulsound::Ulsound(const rapidjson::Value &json_conf) : hj_bf::Function(json_conf)
     std::string dev_path = json_conf["side_dev"].GetString();
     if (!dev_path.empty()) {
       side_uart_.SetDev(dev_path);
-    }
-  }
-  if (json_conf.HasMember("machine_version") && json_conf["machine_version"].IsString()) {
-    std::string machine_version = json_conf["machine_version"].GetString();
-    if (!machine_version.empty()) {
-      machine_version_ = machine_version;
     }
   }
   if (json_conf.HasMember("side_dev_back") && json_conf["side_dev_back"].IsString()) {
@@ -573,12 +569,22 @@ Ulsound::Ulsound(const rapidjson::Value &json_conf) : hj_bf::Function(json_conf)
       down_uart_.SetDev(dev_path);
     }
   }
+  if (json_conf.HasMember("machine_version") && json_conf["machine_version"].IsString()) {
+    std::string machine_version = json_conf["machine_version"].GetString();
+    if (!machine_version.empty()) {
+      machine_version_ = machine_version;
+    }
+  }
+  if (json_conf.HasMember("front_uls_frequency") && json_conf["front_uls_frequency"].IsInt()) {
+    front_uls_frequency_ = json_conf["front_uls_frequency"].GetInt();
+  }
 
   triple_ultra_pub_ = hj_bf::HJAdvertise<hj_interface::TripleUltra>("triple_ultra", 10);
   left_front_pub_ = hj_bf::HJAdvertise<hj_interface::LeftFront>("x9/left_front", 10);
   left_back_pub_ = hj_bf::HJAdvertise<hj_interface::LeftBack>("x9/left_back", 10);
-  down_left_pub_ = hj_bf::HJAdvertise<hj_interface::DownRight>("x9/down_right", 10);
+  down_right_pub_ = hj_bf::HJAdvertise<hj_interface::DownRight>("x9/down_right", 10);
   restart_sub_ = hj_bf::HJSubscribe("/xxx", 1, &Ulsound::RestartCallback, this);
+  sub_time_diff_ = hj_bf::HJSubscribe("/time_diff_chatter", 1, &Ulsound::TimeDiffCallback, this);
 
   triple_ultra_msg_.front_l = 65535;
   triple_ultra_msg_.front_m = 65535;

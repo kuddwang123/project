@@ -30,6 +30,7 @@ constexpr char kLogUploadTopicName[] = "/getLogRecord";
 constexpr char kLogUploadTempPath[] = "/tmp";
 constexpr char kLogUploadCoreDumpDir[] = "/userdata/hj/log/core_dump";
 constexpr char kLogUploadLogDir[] = "/userdata/hj/log/logging";
+constexpr char kLogUploadSensorDataDir[] = "/userdata/hj/log/sensor_data_alg";
 constexpr char kLogUploadErrorLog[] = "log_err";
 constexpr char kLogUploadFileTopicName[] = "/upload/file";
 constexpr char kLogUploadDefaultSN[] = "000";
@@ -174,11 +175,17 @@ bool LogUpload::PackUtils(const std::string& timestamp_str, std::string& pack_na
   std::string prefix = "utils_node_";
   boost::filesystem::path directory_path = log_dir_;
   GetFilesWithPrefix(directory_path, all_file, prefix);
-  directory_path = core_dump_dir_ = "/dump_utils_node";
+  directory_path = core_dump_dir_ + "/dump_utils_node";
   GetFiles(directory_path, all_file);
   GetFilesWithPrefix(directory_path, all_file, error_dir_);
   PrintListName(all_file);
   return hj_bf::CreateZipFileByFiles(pack_name, all_file);
+}
+
+bool LogUpload::PackSensorData(const std::string& timestamp_str, std::string& pack_name) {
+  pack_name = kLogUploadTempPath;
+  pack_name += "/" + timestamp_str + "-Aiper" + LogUpload::GetInstance().GetSn() + "-sensor_data.zip";
+  return hj_bf::CreateZipFileByDir(pack_name, sensor_data_);
 }
 
 bool LogUpload::PackAll(const std::string& timestamp_str, std::string& pack_name) {
@@ -230,6 +237,11 @@ bool LogUpload::Pack(enum LogUploadTypes type, std::string& pack_name) {
       return PackUtils(timestamp_str, pack_name);
       //      return PackApp(timestamp_str, pack_name);
     }
+    case kLogUploadSensorData: {
+      HJ_INFO("IN Pack Sensor_data");
+      return PackSensorData(timestamp_str, pack_name);
+      //      return PackApp(timestamp_str, pack_name);
+    }
     case kLogUploadAll: {
       return PackAll(timestamp_str, pack_name);
     }
@@ -242,12 +254,10 @@ bool LogUpload::Pack(enum LogUploadTypes type, std::string& pack_name) {
 
 LogUpload::LogUpload() {
   sn_ = kLogUploadDefaultSN;
-  if (!GetSnFromConfig(sn_)) {
-    HJ_ERROR("GET sn fail");
-  }
   core_dump_dir_ = kLogUploadCoreDumpDir;
   log_dir_ = kLogUploadLogDir;
   error_dir_ = kLogUploadErrorLog;
+  sensor_data_ = kLogUploadSensorDataDir;
   upload_file_cmd_sub_ = hj_bf::HJSubscribe(log_upload::kLogUploadTopicName, 10, &LogUpload::GetCmdCallback, this);
   std::thread process_thread(&LogUpload::UploadProcesser, this);
   process_thread.detach();
@@ -256,6 +266,9 @@ std::string& LogUpload::GetSn() { return sn_; }
 
 void LogUpload::UploadProcesser() {
   HJ_INFO("IN UploadProcesser");
+  if (!GetSnFromConfig(sn_)) {
+    HJ_ERROR("GET sn fail");
+  }
   uint64_t log_id = 0;
   std::vector<int> types;
   std::unique_lock<std::mutex> weakup_lk(queue_cond_mutex_);

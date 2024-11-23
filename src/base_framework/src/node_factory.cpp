@@ -14,9 +14,13 @@
 
 #include "function_factory.h"
 #include "memory"
+#include <fstream>
 #include "rapidjson/document.h"
 #include "rapidjson/error/en.h"
 #include "rapidjson/filereadstream.h"
+#include <rapidjson/writer.h>
+#include <rapidjson/stringbuffer.h>
+#include "node_cache.h"
 #include "log.h"
 namespace hj_bf {
 ManagerNode* g_manager_node_ptr = nullptr;
@@ -28,6 +32,7 @@ struct ManagerNode::ManagerParam {
   std::unordered_map<std::string, std::map<uint32_t, std::shared_ptr<ros::ServiceClient>>> clients;
   std::unordered_map<std::string, std::shared_ptr<ros::ServiceServer>> servers;
   std::unordered_map<std::string, std::shared_ptr<ros::Timer>> timers;
+  std::unordered_map<std::string, std::shared_ptr<ros::SteadyTimer>> steady_timers;
   uint32_t publishers_index = 0;
   uint32_t subscribers_index = 0;
   uint32_t clients_index = 0;
@@ -37,8 +42,10 @@ struct ManagerNode::ManagerParam {
   std::mutex clients_mutex;
   std::mutex servers_mutex;
   std::mutex timers_mutex;
+  std::mutex steady_timers_mutex;
 };
-ManagerNode::ManagerNode(uint32_t thread_count) : spinner_(thread_count) {
+
+ManagerNode::ManagerNode(const std::shared_ptr<struct NodeConfig>& in_config) : spinner_(in_config->node_threads) ,config_ptr_(in_config){
   node_handle_ptr_ = std::make_shared<ros::NodeHandle>();
   manager_ptr_ = std::make_unique<ManagerParam>();
 }
@@ -132,6 +139,60 @@ void registerFdCtrl(int fd, FdCallBack callback) {
     g_fd_callbacks[fd] = callback;
   }
 }
+
+void readConfigure(const std::string& config_file_name, std::shared_ptr<struct NodeConfig> out_config) {
+  std::ifstream config_file;
+  config_file.open(config_file_name, std::ios::in | std::ios::binary);
+  if (!config_file.is_open()) {
+    std::cerr << "config file not exist!" << std::endl;
+    throw std::runtime_error("config file not exist!");
+  }
+  std::string data;
+  config_file.seekg(0, std::ios::end);
+  size_t length = config_file.tellg();
+
+  config_file.seekg(0, std::ios::beg);
+  //    data.reserve(length + 10);
+  data.resize(length + 10);
+  config_file.read(const_cast<char*>(&data[0]), length);
+  config_file.close();
+  rapidjson::Document document;
+
+  document.Parse<rapidjson::kParseCommentsFlag | rapidjson::kParseTrailingCommasFlag>(data.c_str());
+  if (!document.HasParseError() && document.IsObject()) {
+    if (document.HasMember("log_path_config") && document["log_path_config"].IsString()) {
+      out_config->log_config_path = document["log_path_config"].GetString();
+    }
+
+    if (document.HasMember("all_log_close") && document["all_log_close"].IsBool()) {
+      out_config->all_log_close = document["all_log_close"].GetBool();
+    }
+
+    if (document.HasMember("node_log_close") && document["node_log_close"].IsBool()) {
+      out_config->node_log_close = document["node_log_close"].GetBool();
+    }
+
+    if (document.HasMember("node_threads") && document["node_threads"].IsUint()) {
+      out_config->node_threads = document["node_threads"].GetUint();
+    }
+    if (document.HasMember("node_name") && document["node_name"].IsString()) {
+      out_config->node_name = document["node_name"].GetString();
+    }
+
+    if (document.HasMember("so_dir") && document["so_dir"].IsString()) {
+      out_config->so_path = document["so_dir"].GetString();
+    }
+    if (document.HasMember("functions") && document["functions"].IsArray()) {//??
+      rapidjson::StringBuffer buffer;
+      rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+      document["functions"].Accept(writer);  // 将值写入缓冲区
+      out_config->value_str = buffer.GetString();
+    }
+  } else {
+    std::cerr << "cant analysis " << config_file_name << " string to json" << std::endl;
+    throw std::runtime_error("cant analysis config file");
+  }
+}
 void getConfigure(const std::string& file, const std::string& so_path) {
   FILE* fp = fopen(file.c_str(), "rb");
   if (fp == nullptr) {
@@ -172,7 +233,6 @@ void getConfigure(const std::string& file, const std::string& so_path) {
         if (d_name_len > 6) {
           if (0 == strncmp(so_name->d_name, "lib", 3) && 0 == strcmp(so_name->d_name + d_name_len - 3, ".so")) {
             auto path = so_dir_string + so_name->d_name;
-            // std::cout << "minos get the so, name:" << path << std::endl;
             HJ_INFO("minos2 get the so, name:%s",path.c_str());
             factory.registerFunction(path);
           }
@@ -185,11 +245,44 @@ void getConfigure(const std::string& file, const std::string& so_path) {
       for (rapidjson::SizeType i = 0; i < functions.Size(); ++i) {
         const rapidjson::Value& function = functions[i];
         std::unique_ptr<hj_bf::Function> temp_function = factory.instantiateFunction(function);
-        // std::cout << "minos success to instantiate a function ,name:" << temp_function->name() << std::endl;
         HJ_INFO("minos2 success to instantiate a function ,name:%s",temp_function->name().c_str());
         g_manager_node_ptr->hj_functions_[temp_function->name()] = std::move(temp_function);
       }
     }
+  }
+}
+void nodeInstance() {
+  hj_bf::FunctionFactory factory;
+
+  DIR* so_dir = nullptr;
+  struct dirent* so_name = nullptr;
+  std::string so_path_str =
+      g_manager_node_ptr->config_ptr_->so_path + "/" + g_manager_node_ptr->config_ptr_->node_name + "/";
+  so_dir = opendir(so_path_str.c_str());
+  if (so_dir == nullptr) {
+    std::cerr << "open so dir fail!" << std::endl;
+    throw std::runtime_error("open so dir fail!");
+  }
+  while ((so_name = readdir(so_dir)) != nullptr) {
+    int d_name_len = strlen(so_name->d_name);
+    if (d_name_len > 6) {
+      if (0 == strncmp(so_name->d_name, "lib", 3) && 0 == strcmp(so_name->d_name + d_name_len - 3, ".so")) {
+        auto path = so_path_str + so_name->d_name;
+        HJ_INFO("minos get the so, name:%s", path.c_str());
+        factory.registerFunction(path);
+      }
+    }
+  }
+  closedir(so_dir);
+
+  rapidjson::Document document;
+  document.Parse<rapidjson::kParseCommentsFlag | rapidjson::kParseTrailingCommasFlag>(
+      g_manager_node_ptr->config_ptr_->value_str.c_str());
+  for (rapidjson::SizeType i = 0; i < document.Size(); ++i) {
+    const rapidjson::Value& function = document[i];
+    std::unique_ptr<hj_bf::Function> temp_function = factory.instantiateFunction(function);
+    HJ_INFO("minos success to instantiate a function ,name:%s", temp_function->name().c_str());
+    g_manager_node_ptr->hj_functions_[temp_function->name()] = std::move(temp_function);
   }
 }
 
@@ -255,6 +348,14 @@ void deleteTimer(const std::string& timer_name) {
   }
 }
 
+void deleteSteadyTimer(const std::string& timer_name) {
+  std::lock_guard<std::mutex> lk(g_manager_node_ptr->manager_ptr_->steady_timers_mutex);
+  auto it = g_manager_node_ptr->manager_ptr_->steady_timers.find(timer_name);
+  if (it != g_manager_node_ptr->manager_ptr_->steady_timers.end()) {
+    g_manager_node_ptr->manager_ptr_->steady_timers.erase(timer_name);
+  }
+}
+
 uint32_t getAllPublisher() {
   std::lock_guard<std::mutex> lk(g_manager_node_ptr->manager_ptr_->publishers_mutex);
   uint32_t ret = g_manager_node_ptr->manager_ptr_->publishers.size();
@@ -316,10 +417,10 @@ ManagerNode::~ManagerNode() {
   g_manager_node_ptr->spinner_.stop();
   ros::shutdown();
 }
-void ManagerNode::createInstance(uint32_t thread_count) {
+void ManagerNode::createInstance(const std::shared_ptr<struct NodeConfig>& in_config) {
   static std::once_flag flag;
   //  static
-  static ManagerNode temp(thread_count);
+  static ManagerNode temp(in_config);
   std::call_once(
       flag,
       [](uint32_t count) {
@@ -329,14 +430,14 @@ void ManagerNode::createInstance(uint32_t thread_count) {
           throw std::runtime_error("ManagerNode create error!");
         }
       },
-      thread_count);
+      in_config->node_threads);
   /* */
 }
 
 ros::NodeHandle& getHandle() { return *(g_manager_node_ptr->node_handle_ptr_); }
-void nodeInit(int argc, char** argv, const std::string& node_name, uint32_t thread_count, uint32_t ops) {
+void nodeInit(int argc, char** argv, const std::string& node_name, const std::shared_ptr<struct NodeConfig>& in_config, uint32_t ops) {
   ros::init(argc, argv, node_name, ops);
-  ManagerNode::createInstance(thread_count);
+  ManagerNode::createInstance(in_config);
 }
 
 void nodeStart() { g_manager_node_ptr->spinner_.start(); }
@@ -382,7 +483,16 @@ HJClient::~HJClient() {
     deleteClient(name_, index_);
   }
 }
+
 bool HJClient::isValid() const { return client_ptr_->isValid(); }
+bool HJClient::exists() { return client_ptr_->exists(); }
+bool HJClient::waitForExistence(const double us) {
+  if (us < 0) {
+    return client_ptr_->waitForExistence(ros::Duration(-1));
+  }
+  return client_ptr_->waitForExistence(ros::Duration(us / 1000000));
+}
+
 HJServer::~HJServer() {
   if (2 == server_ptr_.use_count()) {
     deleteServer(name_);
@@ -410,6 +520,28 @@ HJTimer HJCreateTimer(const std::string name, double us, const HJTimerCallback& 
   std::cerr << "Registering timer with the same name is not allowed!" << std::endl;
   throw std::runtime_error("Registering timer with the same name is not allowed!");
 }
+
+HJSteadyTimer HJCreateSteadyTimer(const std::string name, double us, const HJSteadyTimerCallback& callback, bool oneshot, bool autostart) {
+  std::lock_guard<std::mutex> lk(g_manager_node_ptr->manager_ptr_->steady_timers_mutex);
+  auto it = g_manager_node_ptr->manager_ptr_->steady_timers.find(name);
+  if (it == g_manager_node_ptr->manager_ptr_->steady_timers.end()) {
+    g_manager_node_ptr->manager_ptr_->steady_timers[name] = std::make_shared<ros::SteadyTimer>(
+        g_manager_node_ptr->node_handle_ptr_->createSteadyTimer(ros::WallDuration(us / 1000000), callback, oneshot, autostart));
+    return HJSteadyTimer(us, g_manager_node_ptr->manager_ptr_->steady_timers[name], name);
+  }
+  std::cerr << "Registering steady_timer with the same name is not allowed!" << std::endl;
+  throw std::runtime_error("Registering steady_timer with the same name is not allowed!");
+}
+
+HJSteadyTimer::~HJSteadyTimer() {
+  if (2 == timer_ptr_.use_count()) {
+    deleteSteadyTimer(name_);
+  }
+}
+void HJSteadyTimer::start() { timer_ptr_->start(); }
+void HJSteadyTimer::stop() { timer_ptr_->stop(); }
+void HJSteadyTimer::setPeriod(const double us) { timer_ptr_->setPeriod(ros::WallDuration(us / 1000000)); }
+bool HJSteadyTimer::hasPending() { return timer_ptr_->hasPending(); }
 
 void HighResolutionTimer::start(double interval, std::function<void()> callback) {
   if (running_) {
@@ -443,6 +575,10 @@ void HighResolutionTimer::stop() {
   }
 }
 HighResolutionTimer::~HighResolutionTimer() { stop(); };
+
+bool ok() {
+  return ros::ok();
+}
 
 std::unordered_map<int, std::string> g_params = {std::make_pair(SIGSEGV, "SIGSEGV"), std::make_pair(SIGABRT, "SIGABRT"),
                                                  std::make_pair(SIGBUS, "SIGBUS")};

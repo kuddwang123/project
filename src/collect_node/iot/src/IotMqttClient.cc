@@ -1,10 +1,14 @@
 #include "IotMqttClient.h"
+#include "Utils.h"
 #include <future>
 #include "log.h"
 #include <sys/prctl.h>
 
 namespace collect_node_iot {
+extern utils::CountDownLatch cdlatch_g;
+
 IotMqttClient::IotMqttClient(const std::string& thingName):
+    subRun_(false),
     subIotFlag_(0x00)
 {
     downChanTopic_ = "aiper/things/" + thingName + "/downChan";
@@ -12,8 +16,12 @@ IotMqttClient::IotMqttClient(const std::string& thingName):
     downChanCloudTopic_ = "aiper/things/" + thingName + "/cloud/device/downChan";
     upChanCloudTopic_ = "aiper/things/" + thingName + "/device/cloud/upChan";
     reportAppTopic_ = "aiper/things/" + thingName + "/app/report";
+    reportShadowTopic_ = "aiper/things/" + thingName + "/shadow/report";
     reportCloudTopic_ = "aiper/things/" + thingName + "/cloud/report";
-    bigDataTopic_ = "aiper/things/" + thingName + "/bigdata/report";
+
+    utils::DevInfo devInfo("/tmp/devInfo.json");
+    bigDataTopic_ = "aiper/things/" + thingName + "/" + devInfo.model() + "/bigdata/report";
+    HJ_INFO("big data topic: [%s]\n", bigDataTopic_.c_str());
 }
 
 IotMqttClient::~IotMqttClient()
@@ -32,28 +40,43 @@ void IotMqttClient::connectSlot()
 {
     HJ_INFO("Iot MQTT connect succ back call!\n");
 
+    if (subRun_.load()) {
+        HJ_INFO("sub in run, skip\n");
+        return;
+    }
+    
+    if (subIotFlag_.load() == (SUB_IOT_TOPIC_ACK | SUB_IOT_CLOUD_TOPIC_ACK)) {
+        HJ_INFO("sub iot topic done, skip");
+        return;
+    }
+
     subIotCoreThread_ = std::thread(&IotMqttClient::subToDownChanThread, this);
     subIotCoreThread_.detach();
 }
 
 void IotMqttClient::disconnSlot()
 {
-    subIotFlag_ = 0;
+    subIotFlag_.store(0);
 }
 
 void IotMqttClient::subToDownChanThread()
 {
     ros::Rate loop_rate(100);
-    while(subIotFlag_ != (SUB_IOT_TOPIC_ACK | SUB_IOT_CLOUD_TOPIC_ACK)) {
-        if (!(subIotFlag_ & SUB_IOT_TOPIC_ACK)) {
+    HJ_INFO("Subscribe to IOT core...\n");
+    subRun_.store(true);
+    while(subIotFlag_.load() != (SUB_IOT_TOPIC_ACK | SUB_IOT_CLOUD_TOPIC_ACK)) {
+        if (!(subIotFlag_.load() & SUB_IOT_TOPIC_ACK)) {
             this->subToDownChan();
         }
 
-        if (!(subIotFlag_ & SUB_IOT_CLOUD_TOPIC_ACK)) {
+        if (!(subIotFlag_.load() & SUB_IOT_CLOUD_TOPIC_ACK)) {
             this->subToCloudDownChan();
         }
         loop_rate.sleep();
     }
+    HJ_INFO("Subscribe to IOT core done!\n");
+    subRun_.store(false);
+    cdlatch_g.countDown();
 }
 
 void IotMqttClient::subToDownChan()
@@ -230,7 +253,6 @@ void IotMqttClient::mqttBigDataReport(const Aws::Crt::String& buffer)
     conn->Publish(bigDataTopic_.c_str(), AWS_MQTT_QOS_AT_LEAST_ONCE, false, payload, onPublishComplete);
 }
 
-#if 0
 void IotMqttClient::updateShadowReport(const Aws::Crt::String& buffer)
 {
     Aws::Crt::ByteBuf payload = Aws::Crt::ByteBufFromArray((const uint8_t *)buffer.data(), buffer.length());
@@ -250,6 +272,6 @@ void IotMqttClient::updateShadowReport(const Aws::Crt::String& buffer)
     
     conn->Publish(reportShadowTopic_.c_str(), AWS_MQTT_QOS_AT_LEAST_ONCE, false, payload, onPublishComplete);
 }
-#endif
+
 
 }

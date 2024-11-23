@@ -170,7 +170,7 @@ void IotShadowClientLink::registCallBackToShadowClient()
                                        boost::placeholders::_2));
 }
 
-bool IotShadowClientLink::dvcUpdateShadow(const hj_interface::AppMsg::ConstPtr& msg)
+bool IotShadowClientLink::dvcUpdateShadow(const hj_interface::AppMsg& msg)
 {
     Aws::Crt::JsonObject reportData;
     Aws::Crt::JsonObject jsonValueNull;
@@ -181,12 +181,12 @@ bool IotShadowClientLink::dvcUpdateShadow(const hj_interface::AppMsg::ConstPtr& 
         return false;
     }
 
-    if (msg->appdata.empty()) {
+    if (msg.appdata.empty()) {
         HJ_ERROR("update empty\n");
         return false;
     }
 
-    for (const auto& data:msg->appdata) {
+    for (const auto& data:msg.appdata) {
         if (data.payload.empty()) {
             reportData.WithObject(data.key.data(), jsonValueNull);
         } else {
@@ -195,7 +195,7 @@ bool IotShadowClientLink::dvcUpdateShadow(const hj_interface::AppMsg::ConstPtr& 
                 HJ_ERROR("payload data invalid:%s\n", data.payload.c_str());
                 return false;
             }
-            if (subdata.View().IsObject()) {
+            if (subdata.View().IsObject() || subdata.View().IsListType()) {
                 reportData.WithObject(data.key.data(), subdata);
             } else {
                 HJ_ERROR("payload not object:%s\n", data.payload.c_str());
@@ -206,7 +206,7 @@ bool IotShadowClientLink::dvcUpdateShadow(const hj_interface::AppMsg::ConstPtr& 
 
     int ret = 0;
     Aws::Crt::UUID uuid;
-    return shadowClientPtr_->pubUpdateShadowDoc(uuid.ToString(), reportData, 0, AWS_MQTT_QOS_AT_LEAST_ONCE, ret);
+    return shadowClientPtr_->pubUpdateShadowDoc(uuid.ToString(), reportData, 0, AWS_MQTT_QOS_AT_MOST_ONCE, ret);
 }
 
 void IotShadowClientLink::getShadowRejectCb(Aws::Iotshadow::ErrorResponse* awsRes, int ioErr)
@@ -464,6 +464,21 @@ bool IotShadowClientLink::linkDeleteShadow(const hj_interface::IotShadowRequest&
 
 void IotShadowClientLink::updateShadowAcceptCb(Aws::Iotshadow::UpdateShadowResponse * awsRes, int ioErr)
 {
+    if (shadowUpdateAccptCb_) {
+        std::vector<hj_interface::AppData> appdataV;
+        auto state = awsRes->State->Reported;
+        if (state) {
+            auto updatemap = state->View().GetAllObjects();
+            for (auto it = updatemap.begin(); it != updatemap.end(); ++it) {
+                hj_interface::AppData appdata;
+                appdata.key = std::string(it->first.data());
+                appdata.payload = std::string(it->second.WriteCompact().data());
+                appdataV.emplace_back(appdata);
+            }
+            shadowUpdateAccptCb_(appdataV);
+        }
+    }
+
     if (!awsRes->ClientToken) {
         return;
     }

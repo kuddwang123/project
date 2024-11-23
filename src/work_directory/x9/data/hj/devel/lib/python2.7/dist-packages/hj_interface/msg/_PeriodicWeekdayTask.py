@@ -9,12 +9,13 @@ import struct
 import hj_interface.msg
 
 class PeriodicWeekdayTask(genpy.Message):
-  _md5sum = "077dd2f002246e4d356e0ab0ff6a1e6b"
+  _md5sum = "b0391a22bc7c81642619e2d7209e30f3"
   _type = "hj_interface/PeriodicWeekdayTask"
   _has_header = False  # flag to mark the presence of a Header object
   _full_text = """string name_id
 int32 weekday
 string start_time
+int32 smart        # 0-普通模式 1-智能模式
 CleanAreas[] clean_areas
 int32 clean_mode   # 1-变频 2-标准 3-深度
 ================================================================================
@@ -22,8 +23,8 @@ MSG: hj_interface/CleanAreas
 int32 clean_area  #清扫区域 1-水面 2-池底 3-池壁
 int32 count       #清扫次数
 int32 time        #清扫时间单位分钟"""
-  __slots__ = ['name_id','weekday','start_time','clean_areas','clean_mode']
-  _slot_types = ['string','int32','string','hj_interface/CleanAreas[]','int32']
+  __slots__ = ['name_id','weekday','start_time','smart','clean_areas','clean_mode']
+  _slot_types = ['string','int32','string','int32','hj_interface/CleanAreas[]','int32']
 
   def __init__(self, *args, **kwds):
     """
@@ -33,7 +34,7 @@ int32 time        #清扫时间单位分钟"""
     changes.  You cannot mix in-order arguments and keyword arguments.
 
     The available fields are:
-       name_id,weekday,start_time,clean_areas,clean_mode
+       name_id,weekday,start_time,smart,clean_areas,clean_mode
 
     :param args: complete set of field values, in .msg order
     :param kwds: use keyword arguments corresponding to message field names
@@ -48,6 +49,8 @@ int32 time        #清扫时间单位分钟"""
         self.weekday = 0
       if self.start_time is None:
         self.start_time = ''
+      if self.smart is None:
+        self.smart = 0
       if self.clean_areas is None:
         self.clean_areas = []
       if self.clean_mode is None:
@@ -56,6 +59,7 @@ int32 time        #清扫时间单位分钟"""
       self.name_id = ''
       self.weekday = 0
       self.start_time = ''
+      self.smart = 0
       self.clean_areas = []
       self.clean_mode = 0
 
@@ -85,6 +89,8 @@ int32 time        #清扫时间单位分钟"""
         _x = _x.encode('utf-8')
         length = len(_x)
       buff.write(struct.Struct('<I%ss'%length).pack(length, _x))
+      _x = self.smart
+      buff.write(_get_struct_i().pack(_x))
       length = len(self.clean_areas)
       buff.write(_struct_I.pack(length))
       for val1 in self.clean_areas:
@@ -129,6 +135,9 @@ int32 time        #清扫时间单位分钟"""
         self.start_time = str[start:end]
       start = end
       end += 4
+      (self.smart,) = _get_struct_i().unpack(str[start:end])
+      start = end
+      end += 4
       (length,) = _struct_I.unpack(str[start:end])
       self.clean_areas = []
       for i in range(0, length):
@@ -167,6 +176,8 @@ int32 time        #清扫时间单位分钟"""
         _x = _x.encode('utf-8')
         length = len(_x)
       buff.write(struct.Struct('<I%ss'%length).pack(length, _x))
+      _x = self.smart
+      buff.write(_get_struct_i().pack(_x))
       length = len(self.clean_areas)
       buff.write(_struct_I.pack(length))
       for val1 in self.clean_areas:
@@ -210,6 +221,9 @@ int32 time        #清扫时间单位分钟"""
         self.start_time = str[start:end].decode('utf-8', 'rosmsg')
       else:
         self.start_time = str[start:end]
+      start = end
+      end += 4
+      (self.smart,) = _get_struct_i().unpack(str[start:end])
       start = end
       end += 4
       (length,) = _struct_I.unpack(str[start:end])

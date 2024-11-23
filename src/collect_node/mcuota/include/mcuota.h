@@ -83,8 +83,8 @@ class State {
     State* nextFailState_;
     bool result_;
     std::string rst_msg_;
-
-    #define STATERET(v,m)  result_=v; rst_msg_=m; return result_;
+    hj_bf::HJTimer writeTmr_;
+    #define STATERET(v,m)  writeTmr_.stop(); result_=v; rst_msg_=m; return result_;
 };
 
 class StartOta: public State {
@@ -92,6 +92,9 @@ class StartOta: public State {
     StartOta(int fd, UartOtaDataHandler*);
     ~StartOta() {};
     bool handle() override;
+  
+  private:
+    void writeUartTmrCb(const hj_bf::HJTimerEvent&);
 };
 
 class FirmwareInfo: public State {
@@ -100,13 +103,17 @@ class FirmwareInfo: public State {
     ~FirmwareInfo() {};
     void init(uint32_t size, const std::string& ver);
     bool handle() override;
-  
+
   private:
+    uint8_t verCount_;
     uint32_t size_;
     std::string ver_;
-  
+    bool writeFirmDone_;
+    std::vector<uint16_t> parsedVerNum_;
+
   private:
-    bool parseVer(const std::string&, uint16_t*);
+    bool parseVer(const std::string&);
+    void writeFirmTmrCb(const hj_bf::HJTimerEvent&);
 };
 
 class SendBin: public State {
@@ -125,6 +132,7 @@ class SendBin: public State {
   
   private:
     uint16_t sendBin2uart(uint16_t index, uint32_t offset);
+    void sendBinTmrCb(const hj_bf::HJTimerEvent&) {};
 };
 
 /*ota串口数据的处理*/

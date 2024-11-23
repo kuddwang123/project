@@ -9,7 +9,7 @@ import struct
 import hj_interface.msg
 
 class PeriodicTaskPkg(genpy.Message):
-  _md5sum = "5b4594180bd83b66a39bcb65498298aa"
+  _md5sum = "bdc52969980ff4c2018d392e4984338f"
   _type = "hj_interface/PeriodicTaskPkg"
   _has_header = False  # flag to mark the presence of a Header object
   _full_text = """int32 task_type         #0-快速任务 1-计时任务 2-周期任务 3-手动任务
@@ -23,6 +23,7 @@ MSG: hj_interface/PeriodicWeekdayTask
 string name_id
 int32 weekday
 string start_time
+int32 smart        # 0-普通模式 1-智能模式
 CleanAreas[] clean_areas
 int32 clean_mode   # 1-变频 2-标准 3-深度
 ================================================================================
@@ -35,6 +36,7 @@ MSG: hj_interface/PeriodicIntervalTask
 string name_id
 string date
 string start_time
+int32 smart        # 0-普通模式 1-智能模式
 int32 interval_days
 CleanAreas[] clean_areas
 int32 clean_mode   # 1-变频 2-标准 3-深度"""
@@ -109,6 +111,8 @@ int32 clean_mode   # 1-变频 2-标准 3-深度"""
           _x = _x.encode('utf-8')
           length = len(_x)
         buff.write(struct.Struct('<I%ss'%length).pack(length, _x))
+        _x = val1.smart
+        buff.write(_get_struct_i().pack(_x))
         length = len(val1.clean_areas)
         buff.write(_struct_I.pack(length))
         for val2 in val1.clean_areas:
@@ -134,8 +138,8 @@ int32 clean_mode   # 1-变频 2-标准 3-深度"""
         _x = _x.encode('utf-8')
         length = len(_x)
       buff.write(struct.Struct('<I%ss'%length).pack(length, _x))
-      _x = self.interval_task.interval_days
-      buff.write(_get_struct_i().pack(_x))
+      _x = self
+      buff.write(_get_struct_2i().pack(_x.interval_task.smart, _x.interval_task.interval_days))
       length = len(self.interval_task.clean_areas)
       buff.write(_struct_I.pack(length))
       for val1 in self.interval_task.clean_areas:
@@ -192,6 +196,9 @@ int32 clean_mode   # 1-变频 2-标准 3-深度"""
           val1.start_time = str[start:end]
         start = end
         end += 4
+        (val1.smart,) = _get_struct_i().unpack(str[start:end])
+        start = end
+        end += 4
         (length,) = _struct_I.unpack(str[start:end])
         val1.clean_areas = []
         for i in range(0, length):
@@ -232,9 +239,10 @@ int32 clean_mode   # 1-变频 2-标准 3-深度"""
         self.interval_task.start_time = str[start:end].decode('utf-8', 'rosmsg')
       else:
         self.interval_task.start_time = str[start:end]
+      _x = self
       start = end
-      end += 4
-      (self.interval_task.interval_days,) = _get_struct_i().unpack(str[start:end])
+      end += 8
+      (_x.interval_task.smart, _x.interval_task.interval_days,) = _get_struct_2i().unpack(str[start:end])
       start = end
       end += 4
       (length,) = _struct_I.unpack(str[start:end])
@@ -280,6 +288,8 @@ int32 clean_mode   # 1-变频 2-标准 3-深度"""
           _x = _x.encode('utf-8')
           length = len(_x)
         buff.write(struct.Struct('<I%ss'%length).pack(length, _x))
+        _x = val1.smart
+        buff.write(_get_struct_i().pack(_x))
         length = len(val1.clean_areas)
         buff.write(_struct_I.pack(length))
         for val2 in val1.clean_areas:
@@ -305,8 +315,8 @@ int32 clean_mode   # 1-变频 2-标准 3-深度"""
         _x = _x.encode('utf-8')
         length = len(_x)
       buff.write(struct.Struct('<I%ss'%length).pack(length, _x))
-      _x = self.interval_task.interval_days
-      buff.write(_get_struct_i().pack(_x))
+      _x = self
+      buff.write(_get_struct_2i().pack(_x.interval_task.smart, _x.interval_task.interval_days))
       length = len(self.interval_task.clean_areas)
       buff.write(_struct_I.pack(length))
       for val1 in self.interval_task.clean_areas:
@@ -364,6 +374,9 @@ int32 clean_mode   # 1-变频 2-标准 3-深度"""
           val1.start_time = str[start:end]
         start = end
         end += 4
+        (val1.smart,) = _get_struct_i().unpack(str[start:end])
+        start = end
+        end += 4
         (length,) = _struct_I.unpack(str[start:end])
         val1.clean_areas = []
         for i in range(0, length):
@@ -404,9 +417,10 @@ int32 clean_mode   # 1-变频 2-标准 3-深度"""
         self.interval_task.start_time = str[start:end].decode('utf-8', 'rosmsg')
       else:
         self.interval_task.start_time = str[start:end]
+      _x = self
       start = end
-      end += 4
-      (self.interval_task.interval_days,) = _get_struct_i().unpack(str[start:end])
+      end += 8
+      (_x.interval_task.smart, _x.interval_task.interval_days,) = _get_struct_2i().unpack(str[start:end])
       start = end
       end += 4
       (length,) = _struct_I.unpack(str[start:end])
@@ -429,6 +443,12 @@ _struct_I = genpy.struct_I
 def _get_struct_I():
     global _struct_I
     return _struct_I
+_struct_2i = None
+def _get_struct_2i():
+    global _struct_2i
+    if _struct_2i is None:
+        _struct_2i = struct.Struct("<2i")
+    return _struct_2i
 _struct_3i = None
 def _get_struct_3i():
     global _struct_3i

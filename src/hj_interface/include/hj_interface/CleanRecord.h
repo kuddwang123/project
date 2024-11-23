@@ -28,11 +28,16 @@ struct CleanRecord_
     , surface_clean_area(0.0)
     , bottom_clean_area(0.0)
     , wall_clean_area(0.0)
+    , water_line_clean_area(0.0)
     , pool_area(0.0)
     , pool_volume(0.0)
     , pool_depth(0.0)
+    , pool_little_depth(0.0)
     , pool_shape(0)
     , map_line_file_path()
+    , avoidObstaclesCount(0)
+    , getOutCount(0)
+    , multiple_bottom(0)
     , start_turbidity(0)
     , end_turbidity(0)
     , build_map_faile_reson(0)
@@ -53,6 +58,7 @@ struct CleanRecord_
     , trapped_reason()
     , trapped_count(0)
     , task_status(0)
+    , taskFailReason(0)
     , mapped_area(0.0)
     , untrapped_status(0)
     , untrapped_count(0)
@@ -82,6 +88,7 @@ struct CleanRecord_
     , wall_avoidance_count(0)
     , wall_move()
     , wall_move_count(0)
+    , line_avoidance_count(0)
     , recall_status(0)
     , compensate_reason(0)
     , compensate_retry(0)
@@ -92,11 +99,16 @@ struct CleanRecord_
     , surface_clean_area(0.0)
     , bottom_clean_area(0.0)
     , wall_clean_area(0.0)
+    , water_line_clean_area(0.0)
     , pool_area(0.0)
     , pool_volume(0.0)
     , pool_depth(0.0)
+    , pool_little_depth(0.0)
     , pool_shape(0)
     , map_line_file_path(_alloc)
+    , avoidObstaclesCount(0)
+    , getOutCount(0)
+    , multiple_bottom(0)
     , start_turbidity(0)
     , end_turbidity(0)
     , build_map_faile_reson(0)
@@ -117,6 +129,7 @@ struct CleanRecord_
     , trapped_reason(_alloc)
     , trapped_count(0)
     , task_status(0)
+    , taskFailReason(0)
     , mapped_area(0.0)
     , untrapped_status(0)
     , untrapped_count(0)
@@ -146,6 +159,7 @@ struct CleanRecord_
     , wall_avoidance_count(0)
     , wall_move(_alloc)
     , wall_move_count(0)
+    , line_avoidance_count(0)
     , recall_status(0)
     , compensate_reason(0)
     , compensate_retry(0)
@@ -167,6 +181,9 @@ struct CleanRecord_
    typedef float _wall_clean_area_type;
   _wall_clean_area_type wall_clean_area;
 
+   typedef float _water_line_clean_area_type;
+  _water_line_clean_area_type water_line_clean_area;
+
    typedef float _pool_area_type;
   _pool_area_type pool_area;
 
@@ -176,11 +193,23 @@ struct CleanRecord_
    typedef float _pool_depth_type;
   _pool_depth_type pool_depth;
 
+   typedef float _pool_little_depth_type;
+  _pool_little_depth_type pool_little_depth;
+
    typedef int32_t _pool_shape_type;
   _pool_shape_type pool_shape;
 
    typedef std::basic_string<char, std::char_traits<char>, typename std::allocator_traits<ContainerAllocator>::template rebind_alloc<char>> _map_line_file_path_type;
   _map_line_file_path_type map_line_file_path;
+
+   typedef int32_t _avoidObstaclesCount_type;
+  _avoidObstaclesCount_type avoidObstaclesCount;
+
+   typedef int32_t _getOutCount_type;
+  _getOutCount_type getOutCount;
+
+   typedef int32_t _multiple_bottom_type;
+  _multiple_bottom_type multiple_bottom;
 
    typedef int32_t _start_turbidity_type;
   _start_turbidity_type start_turbidity;
@@ -241,6 +270,9 @@ struct CleanRecord_
 
    typedef int32_t _task_status_type;
   _task_status_type task_status;
+
+   typedef int32_t _taskFailReason_type;
+  _taskFailReason_type taskFailReason;
 
    typedef float _mapped_area_type;
   _mapped_area_type mapped_area;
@@ -329,6 +361,9 @@ struct CleanRecord_
    typedef int32_t _wall_move_count_type;
   _wall_move_count_type wall_move_count;
 
+   typedef int32_t _line_avoidance_count_type;
+  _line_avoidance_count_type line_avoidance_count;
+
    typedef int32_t _recall_status_type;
   _recall_status_type recall_status;
 
@@ -374,11 +409,16 @@ bool operator==(const ::hj_interface::CleanRecord_<ContainerAllocator1> & lhs, c
     lhs.surface_clean_area == rhs.surface_clean_area &&
     lhs.bottom_clean_area == rhs.bottom_clean_area &&
     lhs.wall_clean_area == rhs.wall_clean_area &&
+    lhs.water_line_clean_area == rhs.water_line_clean_area &&
     lhs.pool_area == rhs.pool_area &&
     lhs.pool_volume == rhs.pool_volume &&
     lhs.pool_depth == rhs.pool_depth &&
+    lhs.pool_little_depth == rhs.pool_little_depth &&
     lhs.pool_shape == rhs.pool_shape &&
     lhs.map_line_file_path == rhs.map_line_file_path &&
+    lhs.avoidObstaclesCount == rhs.avoidObstaclesCount &&
+    lhs.getOutCount == rhs.getOutCount &&
+    lhs.multiple_bottom == rhs.multiple_bottom &&
     lhs.start_turbidity == rhs.start_turbidity &&
     lhs.end_turbidity == rhs.end_turbidity &&
     lhs.build_map_faile_reson == rhs.build_map_faile_reson &&
@@ -399,6 +439,7 @@ bool operator==(const ::hj_interface::CleanRecord_<ContainerAllocator1> & lhs, c
     lhs.trapped_reason == rhs.trapped_reason &&
     lhs.trapped_count == rhs.trapped_count &&
     lhs.task_status == rhs.task_status &&
+    lhs.taskFailReason == rhs.taskFailReason &&
     lhs.mapped_area == rhs.mapped_area &&
     lhs.untrapped_status == rhs.untrapped_status &&
     lhs.untrapped_count == rhs.untrapped_count &&
@@ -428,6 +469,7 @@ bool operator==(const ::hj_interface::CleanRecord_<ContainerAllocator1> & lhs, c
     lhs.wall_avoidance_count == rhs.wall_avoidance_count &&
     lhs.wall_move == rhs.wall_move &&
     lhs.wall_move_count == rhs.wall_move_count &&
+    lhs.line_avoidance_count == rhs.line_avoidance_count &&
     lhs.recall_status == rhs.recall_status &&
     lhs.compensate_reason == rhs.compensate_reason &&
     lhs.compensate_retry == rhs.compensate_retry &&
@@ -488,12 +530,12 @@ struct MD5Sum< ::hj_interface::CleanRecord_<ContainerAllocator> >
 {
   static const char* value()
   {
-    return "e48d559db4dcd2d3151cd7918a8f7973";
+    return "f924c990fa5b68470809972cd40636e7";
   }
 
   static const char* value(const ::hj_interface::CleanRecord_<ContainerAllocator>&) { return value(); }
-  static const uint64_t static_value1 = 0xe48d559db4dcd2d3ULL;
-  static const uint64_t static_value2 = 0x151cd7918a8f7973ULL;
+  static const uint64_t static_value1 = 0xf924c990fa5b6847ULL;
+  static const uint64_t static_value2 = 0x0809972cd40636e7ULL;
 };
 
 template<class ContainerAllocator>
@@ -517,12 +559,18 @@ struct Definition< ::hj_interface::CleanRecord_<ContainerAllocator> >
 "float32 surface_clean_area      # 清洁水面面积 单位：m2\n"
 "float32 bottom_clean_area       # 清洁池底面积\n"
 "float32 wall_clean_area         # 清洁池壁面积\n"
+"float32 water_line_clean_area   # 清洁水线面积\n"
 "float32 pool_area               # 泳池面积\n"
 "float32 pool_volume             # 泳池体积\n"
-"float32 pool_depth              # 泳池深度\n"
+"float32 pool_depth              # 泳池最大深度\n"
+"float32 pool_little_depth       # 泳池最小深度\n"
 "int32   pool_shape              # 泳池形状\n"
-"string map_line_file_path       # 地图轨迹文件路径\n"
+"string  map_line_file_path      # 地图轨迹文件路径\n"
+"int32   avoidObstaclesCount     # 避障次数\n"
+"int32   getOutCount             # 脱困次数\n"
+"int32   multiple_bottom         # 多层池底 1-单层 2-多层\n"
 "\n"
+"#### 以下用于埋点的消息\n"
 "## 清洁事件消息- 还有一部分放在清洁日志消息中\n"
 "int32 start_turbidity          # 起始浊度\n"
 "int32 end_turbidity            # 终止浊度\n"
@@ -542,11 +590,12 @@ struct Definition< ::hj_interface::CleanRecord_<ContainerAllocator> >
 "#磁力计信息-半小时1次，单任务6次\n"
 "\n"
 "## 清洁不同区域共同信息\n"
-"int32 mode                     # 清扫模式   1-水面模式 2-池底 3-池壁\n"
+"int32 mode                     # 清扫模式   1-水面模式 2-池底 3-池壁 4-水线\n"
 "float32 clean_area             # 清扫面积\n"
 "int32[] trapped_reason         # 被困触发条件\n"
 "int32 trapped_count            # 被困次数\n"
 "int32 task_status              # 任务状态 0-失败 1-成功\n"
+"int32 taskFailReason           # 任务失败原因\n"
 "float32 mapped_area            # 建图面积\n"
 "int32 untrapped_status         # 脱困状态  0-未脱困 1-脱困\n"
 "int32 untrapped_count          # 脱困次数\n"
@@ -584,6 +633,9 @@ struct Definition< ::hj_interface::CleanRecord_<ContainerAllocator> >
 "int32[] wall_move              # 池壁侧移触发原因（池壁）\n"
 "int32 wall_move_count          # 池壁侧移次数（池壁）\n"
 "\n"
+"## 水线清洁信息\n"
+"int32 line_avoidance_count     # 避障次数\n"
+"\n"
 "## 召回\n"
 "int32 recall_status            # 召回状态 0-失败 1-成功\n"
 "\n"
@@ -613,11 +665,16 @@ namespace serialization
       stream.next(m.surface_clean_area);
       stream.next(m.bottom_clean_area);
       stream.next(m.wall_clean_area);
+      stream.next(m.water_line_clean_area);
       stream.next(m.pool_area);
       stream.next(m.pool_volume);
       stream.next(m.pool_depth);
+      stream.next(m.pool_little_depth);
       stream.next(m.pool_shape);
       stream.next(m.map_line_file_path);
+      stream.next(m.avoidObstaclesCount);
+      stream.next(m.getOutCount);
+      stream.next(m.multiple_bottom);
       stream.next(m.start_turbidity);
       stream.next(m.end_turbidity);
       stream.next(m.build_map_faile_reson);
@@ -638,6 +695,7 @@ namespace serialization
       stream.next(m.trapped_reason);
       stream.next(m.trapped_count);
       stream.next(m.task_status);
+      stream.next(m.taskFailReason);
       stream.next(m.mapped_area);
       stream.next(m.untrapped_status);
       stream.next(m.untrapped_count);
@@ -667,6 +725,7 @@ namespace serialization
       stream.next(m.wall_avoidance_count);
       stream.next(m.wall_move);
       stream.next(m.wall_move_count);
+      stream.next(m.line_avoidance_count);
       stream.next(m.recall_status);
       stream.next(m.compensate_reason);
       stream.next(m.compensate_retry);
@@ -697,16 +756,26 @@ struct Printer< ::hj_interface::CleanRecord_<ContainerAllocator> >
     Printer<float>::stream(s, indent + "  ", v.bottom_clean_area);
     s << indent << "wall_clean_area: ";
     Printer<float>::stream(s, indent + "  ", v.wall_clean_area);
+    s << indent << "water_line_clean_area: ";
+    Printer<float>::stream(s, indent + "  ", v.water_line_clean_area);
     s << indent << "pool_area: ";
     Printer<float>::stream(s, indent + "  ", v.pool_area);
     s << indent << "pool_volume: ";
     Printer<float>::stream(s, indent + "  ", v.pool_volume);
     s << indent << "pool_depth: ";
     Printer<float>::stream(s, indent + "  ", v.pool_depth);
+    s << indent << "pool_little_depth: ";
+    Printer<float>::stream(s, indent + "  ", v.pool_little_depth);
     s << indent << "pool_shape: ";
     Printer<int32_t>::stream(s, indent + "  ", v.pool_shape);
     s << indent << "map_line_file_path: ";
     Printer<std::basic_string<char, std::char_traits<char>, typename std::allocator_traits<ContainerAllocator>::template rebind_alloc<char>>>::stream(s, indent + "  ", v.map_line_file_path);
+    s << indent << "avoidObstaclesCount: ";
+    Printer<int32_t>::stream(s, indent + "  ", v.avoidObstaclesCount);
+    s << indent << "getOutCount: ";
+    Printer<int32_t>::stream(s, indent + "  ", v.getOutCount);
+    s << indent << "multiple_bottom: ";
+    Printer<int32_t>::stream(s, indent + "  ", v.multiple_bottom);
     s << indent << "start_turbidity: ";
     Printer<int32_t>::stream(s, indent + "  ", v.start_turbidity);
     s << indent << "end_turbidity: ";
@@ -751,6 +820,8 @@ struct Printer< ::hj_interface::CleanRecord_<ContainerAllocator> >
     Printer<int32_t>::stream(s, indent + "  ", v.trapped_count);
     s << indent << "task_status: ";
     Printer<int32_t>::stream(s, indent + "  ", v.task_status);
+    s << indent << "taskFailReason: ";
+    Printer<int32_t>::stream(s, indent + "  ", v.taskFailReason);
     s << indent << "mapped_area: ";
     Printer<float>::stream(s, indent + "  ", v.mapped_area);
     s << indent << "untrapped_status: ";
@@ -817,6 +888,8 @@ struct Printer< ::hj_interface::CleanRecord_<ContainerAllocator> >
     }
     s << indent << "wall_move_count: ";
     Printer<int32_t>::stream(s, indent + "  ", v.wall_move_count);
+    s << indent << "line_avoidance_count: ";
+    Printer<int32_t>::stream(s, indent + "  ", v.line_avoidance_count);
     s << indent << "recall_status: ";
     Printer<int32_t>::stream(s, indent + "  ", v.recall_status);
     s << indent << "compensate_reason: ";

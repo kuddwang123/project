@@ -16,12 +16,9 @@ IotMqttClientLink::~IotMqttClientLink()
     HJ_INFO("IotMqttClientLink destruct call\n");
 }
 
-bool IotMqttClientLink::initialize(
-        const std::shared_ptr<IotMqttClient>& iotMqttPtr,
-        const mqttReqFunc& cb)
+bool IotMqttClientLink::initialize(const std::shared_ptr<IotMqttClient>& iotMqttPtr)
 {
     iotMqttClientPtr_ = iotMqttPtr;
-    mqttReqFunc_ = cb;
 
     iotMqttClientPtr_->setAppMqttReqCb(boost::bind(&IotMqttClientLink::mqttMsgIncome, this,
                                  boost::placeholders::_1, boost::placeholders::_2));
@@ -47,13 +44,21 @@ void IotMqttClientLink::mqttMsgIncome(const Aws::Crt::ByteBuf &msg, uint8_t rout
     appmsg.from = route;
 
     for (auto it = view.begin(); it != view.end(); ++it) {
+       if (it->first == "chksum") {
+            continue;
+       }
        appdata.key = std::string(it->first.data());
        appdata.payload = std::string(it->second.WriteCompact().data());
        appmsg.appdata.emplace_back(appdata);
     }
 
-    if (mqttReqFunc_)
+    if (mqttReqFunc_) {
         mqttReqFunc_(appmsg);
+    } else {
+        for(const auto& m: appmsg.appdata) {
+            HJ_INFO("skip mqtt:%s", m.key.c_str());
+        }
+    }
 }
 
 bool IotMqttClientLink::iotMqttResp(const hj_interface::AppMsg::ConstPtr& msg)
@@ -76,7 +81,7 @@ bool IotMqttClientLink::iotMqttResp(const hj_interface::AppMsg::ConstPtr& msg)
     return true;
 }
 
-bool IotMqttClientLink::iotMqttReport(const hj_interface::AppMsg::ConstPtr& msg, uint8_t type)
+bool IotMqttClientLink::iotMqttReport(const hj_interface::AppMsg& msg, uint8_t type)
 {
     if (!iotMqttClientPtr_) {
         HJ_INFO("mqtt client not construct!\n");
@@ -87,7 +92,7 @@ bool IotMqttClientLink::iotMqttReport(const hj_interface::AppMsg::ConstPtr& msg,
     Aws::Crt::JsonObject jsonValueNull;
     jsonValueNull.AsNull();
 
-    for (const auto& data:msg->appdata) {
+    for (const auto& data:msg.appdata) {
         if (data.payload.empty()) {
             report.WithObject(data.key.data(), jsonValueNull);
         } else {
@@ -106,6 +111,10 @@ bool IotMqttClientLink::iotMqttReport(const hj_interface::AppMsg::ConstPtr& msg,
     }
 
     switch(type) {
+        case hj_interface::AppMsg::SHADOW:
+            iotMqttClientPtr_->updateShadowReport(report.View().WriteCompact());
+            break;
+
         case hj_interface::AppMsg::TOPIC:
             iotMqttClientPtr_->mqttAppReport(report.View().WriteCompact());
             break;

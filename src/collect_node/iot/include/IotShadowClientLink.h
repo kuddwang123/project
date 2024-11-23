@@ -107,6 +107,7 @@ private:
 
 class IotShadowClientLink {
 typedef boost::function<void(hj_interface::AppMsg&)> deltaEventInfoDvcFunc;
+typedef boost::function<void(const std::vector<hj_interface::AppData>&)> shadowUpdateAccptCb;
 
 public:
     IotShadowClientLink();
@@ -115,8 +116,11 @@ public:
   //初始化，向aws shadow client注册事件回调
     bool initialize(const std::shared_ptr<IotShadowClient>&, const deltaEventInfoDvcFunc&);
   
+  //注册影子更新成功回调
+    void setShadowUpdateAcceptCb(const shadowUpdateAccptCb& cb) {shadowUpdateAccptCb_ = cb;}
+
   //设备更新状态至shadow doc
-    bool dvcUpdateShadow(const hj_interface::AppMsg::ConstPtr&);
+    bool dvcUpdateShadow(const hj_interface::AppMsg&);
   
   //获取shadow doc
     bool linkGetShadow(const hj_interface::IotShadowRequest&,
@@ -138,6 +142,7 @@ private:
     std::shared_ptr<ServiceIotList<updateShadowInfo>> iotCallServiceLinkList_;
     
     deltaEventInfoDvcFunc deltaUpdateCb_;
+    shadowUpdateAccptCb shadowUpdateAccptCb_;
 
 private:
     void registCallBackToShadowClient();

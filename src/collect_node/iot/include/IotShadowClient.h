@@ -110,6 +110,8 @@ private:
 
     updateDeltaCb updateDeltaCb_;
 
+    std::atomic<uint8_t> subRun_;;
+
 private:
     void subscribeToCore();
 

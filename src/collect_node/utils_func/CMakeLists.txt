@@ -16,6 +16,8 @@ elseif(${PROJECT_NUMBER} STREQUAL "T1pro")
   add_definitions(-DHJ_T1pro)
 endif()
 
+add_definitions(-DENABLE_CSTLOG)
+
 include_directories(include ${catkin_INCLUDE_DIRS})
 include_directories("${HJ_WORKSPACE_PATH}/thirdparty/include")
 include_directories("${HJ_WORKSPACE_PATH}/thirdparty/include/ziplib")
@@ -25,9 +27,12 @@ link_directories("${HJ_WORKSPACE_PATH}/hj_interface/platforms/${PLATFORM}")
 link_directories("${HJ_WORKSPACE_PATH}/thirdparty/platforms/${PLATFORM}")
 add_definitions(-DFUNCTION_NAME="utils_func")
 catkin_package(CATKIN_DEPENDS message_runtime std_msgs)
-add_library(utils_func src/utils_func.cpp src/monitor.cpp src/record_msg.cpp src/log_upload.cpp src/handle_action.cpp)
+add_library(utils_func src/utils_func.cpp src/monitor.cpp
+            src/log_upload.cpp src/handle_action.cpp src/record_msg_alg.cpp
+            src/record_msg_lasting.cpp)
 target_link_libraries(utils_func ${catkin_LIBRARIES} dl)
 target_link_libraries(utils_func base_framework)
 target_link_libraries(utils_func big_data)
+target_link_libraries(utils_func hjlog)
 set_target_properties(utils_func PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${CATKIN_DEVEL_PREFIX}/lib/${INSTALL_DEVEL_PATH})

@@ -28,14 +28,16 @@ struct RelocalizationResultRequest_
   RelocalizationResultRequest_()
     : pose()
     , entry_position_pose()
-    , relocalization_success(false)
-    , building_frames_success(false)  {
+    , relocalization_result(0)
+    , building_frames_result(0)
+    , task_id(0)  {
     }
   RelocalizationResultRequest_(const ContainerAllocator& _alloc)
     : pose(_alloc)
     , entry_position_pose(_alloc)
-    , relocalization_success(false)
-    , building_frames_success(false)  {
+    , relocalization_result(0)
+    , building_frames_result(0)
+    , task_id(0)  {
   (void)_alloc;
     }
 
@@ -47,11 +49,14 @@ struct RelocalizationResultRequest_
    typedef  ::geometry_msgs::Pose_<ContainerAllocator>  _entry_position_pose_type;
   _entry_position_pose_type entry_position_pose;
 
-   typedef uint8_t _relocalization_success_type;
-  _relocalization_success_type relocalization_success;
+   typedef uint8_t _relocalization_result_type;
+  _relocalization_result_type relocalization_result;
 
-   typedef uint8_t _building_frames_success_type;
-  _building_frames_success_type building_frames_success;
+   typedef uint8_t _building_frames_result_type;
+  _building_frames_result_type building_frames_result;
+
+   typedef uint8_t _task_id_type;
+  _task_id_type task_id;
 
 
 
@@ -84,8 +89,9 @@ bool operator==(const ::hj_interface::RelocalizationResultRequest_<ContainerAllo
 {
   return lhs.pose == rhs.pose &&
     lhs.entry_position_pose == rhs.entry_position_pose &&
-    lhs.relocalization_success == rhs.relocalization_success &&
-    lhs.building_frames_success == rhs.building_frames_success;
+    lhs.relocalization_result == rhs.relocalization_result &&
+    lhs.building_frames_result == rhs.building_frames_result &&
+    lhs.task_id == rhs.task_id;
 }
 
 template<typename ContainerAllocator1, typename ContainerAllocator2>
@@ -142,12 +148,12 @@ struct MD5Sum< ::hj_interface::RelocalizationResultRequest_<ContainerAllocator> 
 {
   static const char* value()
   {
-    return "c966b9c0532937e900886404b26ddf3d";
+    return "47e03428c6f8319698e088062fd9d333";
   }
 
   static const char* value(const ::hj_interface::RelocalizationResultRequest_<ContainerAllocator>&) { return value(); }
-  static const uint64_t static_value1 = 0xc966b9c0532937e9ULL;
-  static const uint64_t static_value2 = 0x00886404b26ddf3dULL;
+  static const uint64_t static_value1 = 0x47e03428c6f83196ULL;
+  static const uint64_t static_value2 = 0x98e088062fd9d333ULL;
 };
 
 template<class ContainerAllocator>
@@ -166,10 +172,11 @@ struct Definition< ::hj_interface::RelocalizationResultRequest_<ContainerAllocat
 {
   static const char* value()
   {
-    return "geometry_msgs/Pose pose   # relocalization result\n"
+    return "geometry_msgs/Pose pose                   # relocalization result\n"
 "geometry_msgs/Pose entry_position_pose\n"
-"bool relocalization_success  # true. relocalization success; false. relocalization failed.\n"
-"bool building_frames_success  # true. building frames success; false. building frames failed.\n"
+"uint8 relocalization_result               # 0. none; 1. relocalization success; 2.relocalization failed.\n"
+"uint8 building_frames_result              # 0. none; 1. building frames success; 2. building frames failed.\n"
+"uint8 task_id                             # 2: slam入水重定位   28：召回重定位\n"
 "\n"
 "\n"
 "================================================================================\n"
@@ -213,8 +220,9 @@ namespace serialization
     {
       stream.next(m.pose);
       stream.next(m.entry_position_pose);
-      stream.next(m.relocalization_success);
-      stream.next(m.building_frames_success);
+      stream.next(m.relocalization_result);
+      stream.next(m.building_frames_result);
+      stream.next(m.task_id);
     }
 
     ROS_DECLARE_ALLINONE_SERIALIZER
@@ -239,10 +247,12 @@ struct Printer< ::hj_interface::RelocalizationResultRequest_<ContainerAllocator>
     s << indent << "entry_position_pose: ";
     s << std::endl;
     Printer< ::geometry_msgs::Pose_<ContainerAllocator> >::stream(s, indent + "  ", v.entry_position_pose);
-    s << indent << "relocalization_success: ";
-    Printer<uint8_t>::stream(s, indent + "  ", v.relocalization_success);
-    s << indent << "building_frames_success: ";
-    Printer<uint8_t>::stream(s, indent + "  ", v.building_frames_success);
+    s << indent << "relocalization_result: ";
+    Printer<uint8_t>::stream(s, indent + "  ", v.relocalization_result);
+    s << indent << "building_frames_result: ";
+    Printer<uint8_t>::stream(s, indent + "  ", v.building_frames_result);
+    s << indent << "task_id: ";
+    Printer<uint8_t>::stream(s, indent + "  ", v.task_id);
   }
 };
 

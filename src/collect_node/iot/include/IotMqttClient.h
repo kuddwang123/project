@@ -45,7 +45,7 @@ public:
     void setAppMqttReqCb(const appMqttReqCb& cb) { appMqttCb_ = cb; }
   
   //上报shadow doc
-    //void updateShadowReport(const Aws::Crt::String&);
+    void updateShadowReport(const Aws::Crt::String&);
   
   //上报云端cloud设备数据
     void mqttCloudReport(const Aws::Crt::String&);
@@ -65,8 +65,9 @@ private:
     std::string upChanCloudTopic_;
     std::string reportAppTopic_;
     std::string reportCloudTopic_;
+    std::string reportShadowTopic_;
     std::string bigDataTopic_;
-
+    std::atomic<bool> subRun_;
     std::atomic<uint8_t> subIotFlag_;
     std::thread subIotCoreThread_;
 

@@ -30,13 +30,16 @@ public:
     ~IotMqttClientLink();
 
   //初始化，向aws mqtt client注册事件回调
-    bool initialize(const std::shared_ptr<IotMqttClient>&, const mqttReqFunc&);
+    bool initialize(const std::shared_ptr<IotMqttClient>&);
   
+  //注册mqtt消息回调
+    void setMqttReqCb(const mqttReqFunc& cb) {mqttReqFunc_ = cb;}
+
   //自定义topic响应app数据
     bool iotMqttResp(const hj_interface::AppMsg::ConstPtr&);
 
   //自定义topic上报
-    bool iotMqttReport(const hj_interface::AppMsg::ConstPtr&, uint8_t type);
+    bool iotMqttReport(const hj_interface::AppMsg& msg, uint8_t type);
 
   //shadow上报
     //void iotMqttUpdateShadow(const std::string&);

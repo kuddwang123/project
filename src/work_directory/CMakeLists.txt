@@ -41,15 +41,12 @@ add_custom_target(
 
   # copy shared libraries
   COMMAND
-  cp -rf ${CATKIN_DEVEL_PREFIX}/../src/hj_interface/platforms/aarch64-linux-gnu/libbase_device.so ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NUMBER}/data/hj/lib
+  cp -rf ${CATKIN_DEVEL_PREFIX}/../src/hj_interface/platforms/aarch64-linux-gnu/* ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NUMBER}/data/hj/lib
   COMMAND
-  cp -rf ${CATKIN_DEVEL_PREFIX}/../src/hj_interface/platforms/aarch64-linux-gnu/libbase_framework.so ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NUMBER}/data/hj/lib
+  rm -rf ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NUMBER}/data/hj/lib/libcore_dump.so
   COMMAND
-  cp -rf ${CATKIN_DEVEL_PREFIX}/../src/hj_interface/platforms/aarch64-linux-gnu/librosconsole_log4cxx.so ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NUMBER}/data/hj/lib
-  COMMAND
-  cp -rf ${CATKIN_DEVEL_PREFIX}/../src/hj_interface/platforms/aarch64-linux-gnu/libroscpp.so ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NUMBER}/data/hj/lib
-  COMMAND
-  cp -rf ${CATKIN_DEVEL_PREFIX}/../src/hj_interface/platforms/aarch64-linux-gnu/libhjlog.so ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NUMBER}/data/hj/lib
+  rm -rf ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NUMBER}/data/hj/lib/liblog_redirect.so
+
 
   # copy config files
   COMMAND
@@ -61,6 +58,8 @@ add_custom_target(
   COMMAND
   cp -rf ${CATKIN_DEVEL_PREFIX}/../src/planning_node/planning_node/config/${PROJECT_NUMBER}/aarch64-linux-gnu/config.json ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NUMBER}/data/hj/config/planning_node
 
+  COMMAND
+  python3 getMd5.py ${PROJECT_NUMBER}
 
   COMMAND
   echo "finish copy"

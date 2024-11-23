@@ -1,25 +1,28 @@
 #include "AwsConnectionManager.h"
+#include "Utils.h"
 #include <boost/bind.hpp>
 #include <aws/iot/MqttClient.h>
 #include <aws/crt/Api.h>
-#include <mutex>
-
 #include "log.h"
 namespace collect_node_iot {
 
 AwsConnectionManager::AwsConnectionManager()
-    :keepAliveTimeSecs_(20),
-    pingTimeoutMs_(15*1000),
+    :keepAliveTimeSecs_(10),
+    pingTimeoutMs_(3*1000),
     protocolOperationTimeoutMs_(2000),
     isConnect_(false),
+    connEvtIncome_(false),
     connRun_(false),
+    syncConn_(false),
     connFailIntervalSec_(5) 
 {
 }
 
 AwsConnectionManager::~AwsConnectionManager() 
 {
-    connptr_->Disconnect();
+    if (connptr_) {
+        connptr_->Disconnect();
+    }
     connRun_ = false;
     connCond_.notify_all();
     if (connectThread_.joinable()) {
@@ -44,33 +47,29 @@ const std::shared_ptr<Aws::Crt::Mqtt::MqttConnection>& AwsConnectionManager::get
     return connptr_;
 }
 
-void AwsConnectionManager::disconnect()
+bool AwsConnectionManager::disconnect()
 {
-    if(!isConnect_.load()) {
-        HJ_INFO("MQTT already disconnected!\n");
-        return;
-    }
-
-    std::mutex mtx;
-    std::unique_lock<std::mutex> lc(mtx);
     HJ_INFO("MQTT disconnecting...\n");
-    connptr_->Disconnect();
-    /*
-    {
-        disconnCond_.wait(lc);
-        HJ_INFO("MQTT disconnect!\n");
-    }*/
-}
-
-void AwsConnectionManager::startConnect()
-{
-    if (isConnect_.load()) {
-        HJ_INFO("MQTT already connected, start reconnect\n");
-        startReconnect();
-        return;
+    if (!connptr_) {
+        HJ_INFO("mqtt not construct\n");
+        return true;
     }
     
-    startConnectionThread();
+    connptr_->Disconnect();
+    isConnect_.store(false);
+    return true;
+}
+
+bool AwsConnectionManager::startConnect(bool sync)
+{
+    if (isConnect_.load()) {
+        HJ_INFO("MQTT already connected\n");
+        return true;
+    }
+
+    syncConn_ = sync;
+    
+    return startConnectionThread();
 }
 
 void AwsConnectionManager::startReconnect()
@@ -115,6 +114,13 @@ boost::signals2::connection AwsConnectionManager::addConStatListener(const ConSt
     return conchange_signal_.connect(slot);
 }
 
+void AwsConnectionManager::disconnectAllConnSlots()
+{
+    conn_signal_.disconnect_all_slots();
+    conn_fail_signal_.disconnect_all_slots();
+    drop_signal_.disconnect_all_slots();
+}
+
 bool AwsConnectionManager::initialize(const std::string& cert, 
                     const std::string& key, 
                     const std::string& clientId, 
@@ -127,8 +133,11 @@ bool AwsConnectionManager::initialize(const std::string& cert,
 
     if (connRun_) {
         connRun_ = false;
-        if (connectThread_.joinable())
+        if (connectThread_.joinable()) {
+            connEvtIncome_.store(true);
+            connCond_.notify_all();
             connectThread_.join();
+        }
         HJ_INFO("aws conn thread joined!\n");
     }
     
@@ -222,15 +231,27 @@ void AwsConnectionManager::setMqttClientCallBack()
                                                 boost::placeholders::_2);
 }
 
-void AwsConnectionManager::startConnectionThread()
+bool AwsConnectionManager::startConnectionThread()
 {
-    if (connRun_)
-        return;
+    if (connRun_) {
+        connEvtIncome_.store(true);
+        connRun_ = false;
+        connCond_.notify_all();
+    }
 
     if (connectThread_.joinable())
         connectThread_.join();
 
     connectThread_ = std::thread(&AwsConnectionManager::connectThreadFunc, this);
+    
+    if (syncConn_) {
+        if (connectThread_.joinable()) {
+            connectThread_.join();
+        }
+        return isConnect_.load();
+    } else {
+        return true;
+    }
 }
 
 bool AwsConnectionManager::setLastWill()
@@ -249,16 +270,10 @@ void AwsConnectionManager::connectionCompleteCb(
                           bool) 
 {
     if (errorCode) {
-        HJ_ERROR("Connection failed with error %s\n", Aws::Crt::ErrorDebugString(errorCode));
-        conn_fail_signal_(errorCode, Aws::Crt::ErrorDebugString(errorCode));
+        HJ_ERROR("Connection ack failed with error %s\n", Aws::Crt::ErrorDebugString(errorCode));
     } else {
-        HJ_INFO("Connection completed with return code %d\n", returnCode);
-        isConnect_.store(true);
-        conn_signal_();
-        conchange_signal_(true);
+        HJ_INFO("Connection ack succ with return code %d\n", returnCode);
     }
-
-    connCond_.notify_one();
 }
 
 void AwsConnectionManager::connectionSuccessCb(
@@ -267,6 +282,9 @@ void AwsConnectionManager::connectionSuccessCb(
 {
     HJ_INFO("MQTT Connection success:%d\n", succdata->returnCode);
     isConnect_.store(true);
+    conn_signal_();
+    connEvtIncome_.store(true);
+    connCond_.notify_one();
 }
 
 void AwsConnectionManager::connectionFalureCb(
@@ -274,6 +292,10 @@ void AwsConnectionManager::connectionFalureCb(
                           Aws::Crt::Mqtt::OnConnectionFailureData* faildata)
 {
     HJ_ERROR("MQTT Connection fail:%s\n", Aws::Crt::ErrorDebugString(faildata->error));
+    isConnect_.store(false);
+    conn_fail_signal_(faildata->error, Aws::Crt::ErrorDebugString(faildata->error));
+    connEvtIncome_.store(true);
+    connCond_.notify_one();
 }
 
 void AwsConnectionManager::connectingDisconnectCb(
@@ -300,34 +322,51 @@ void AwsConnectionManager::connectionResumedCb(Aws::Crt::Mqtt::MqttConnection&,
                           bool sessionPresent)
 {
     HJ_INFO("MQTT Connection resumed, session present:%d", sessionPresent);
+    if (!sessionPresent) {
+        if (sessionResumeCb_) {
+            sessionResumeCb_(false);
+        }
+        return;
+    }
     conchange_signal_(true);
     isConnect_.store(true);
 }
 
 void AwsConnectionManager::connectThreadFunc()
 {
-    bool ret = false;
-
-    std::mutex mtx;
-    std::unique_lock<std::mutex> lc(mtx);
-
     connRun_ = true;
+    int failtms = 0;
 
     while (!isConnect_.load() && connRun_) {
+        std::unique_lock<std::mutex> lc(connmtx_);
         HJ_INFO("MQTT Connection [%s] start...\n", clientId_.c_str());
-        ret = connptr_->Connect(clientId_.data(), false, keepAliveTimeSecs_, pingTimeoutMs_, protocolOperationTimeoutMs_);
-        if (!ret) { 
-            HJ_ERROR("MQTT Connection failed with error %s\n", Aws::Crt::ErrorDebugString(connptr_->LastError()));
-            sleep(connFailIntervalSec_);
-            continue;
+        bool connRst = connptr_->Connect(clientId_.data(), false, keepAliveTimeSecs_, pingTimeoutMs_, protocolOperationTimeoutMs_);
+        if (connRst) {
+            connCond_.wait(lc, [&]{
+                return connEvtIncome_.load();
+            });
+            connEvtIncome_.store(false);
         }
-        connCond_.wait(lc);
-        if (!isConnect_.load())
-            sleep(connFailIntervalSec_);
+
+        if (!connRun_) {
+            break;
+        }
+
+        if (!isConnect_.load()) { 
+            HJ_ERROR("MQTT Connection failed with error %s\n", Aws::Crt::ErrorDebugString(connptr_->LastError()));
+            if (syncConn_) {
+                failtms++;
+                if (failtms >= 2) {
+                    HJ_ERROR("sync conn fail\n");
+                    break;
+                }
+            }
+            sleep(connFailIntervalSec_);  
+        }
     }
 
     connRun_ = false;
-    HJ_INFO("MQTT Connection exit\n");
+    HJ_INFO("MQTT Connection exit, ret=%d\n", isConnect_.load());
 }
 
 }

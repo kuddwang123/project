@@ -12,6 +12,8 @@ uint8 action_cmd    # 1: slam建图 2: slam重定位
                     
 uint8 clean_mode    # 1: 变频清洁 2: 标准清洁 3: 深度清洁
 bool  has_map       # true:有  false:没有
+bool  right_angle   # true:是-整个任务包含池底和池壁  false:否-池底池壁不一起出现在任务中
+uint8 stop_reason   # 1: 出水停止， 2：其他原因停止
 
 ---
 

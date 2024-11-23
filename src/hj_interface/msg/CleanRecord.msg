@@ -3,12 +3,18 @@ float32 clean_speed             # 清洁速度 单位：m/s
 float32 surface_clean_area      # 清洁水面面积 单位：m2
 float32 bottom_clean_area       # 清洁池底面积
 float32 wall_clean_area         # 清洁池壁面积
+float32 water_line_clean_area   # 清洁水线面积
 float32 pool_area               # 泳池面积
 float32 pool_volume             # 泳池体积
-float32 pool_depth              # 泳池深度
+float32 pool_depth              # 泳池最大深度
+float32 pool_little_depth       # 泳池最小深度
 int32   pool_shape              # 泳池形状
-string map_line_file_path       # 地图轨迹文件路径
+string  map_line_file_path      # 地图轨迹文件路径
+int32   avoidObstaclesCount     # 避障次数
+int32   getOutCount             # 脱困次数
+int32   multiple_bottom         # 多层池底 1-单层 2-多层
 
+#### 以下用于埋点的消息
 ## 清洁事件消息- 还有一部分放在清洁日志消息中
 int32 start_turbidity          # 起始浊度
 int32 end_turbidity            # 终止浊度
@@ -28,11 +34,12 @@ int32 charge_level             # 充电点等级
 #磁力计信息-半小时1次，单任务6次
 
 ## 清洁不同区域共同信息
-int32 mode                     # 清扫模式   1-水面模式 2-池底 3-池壁
+int32 mode                     # 清扫模式   1-水面模式 2-池底 3-池壁 4-水线
 float32 clean_area             # 清扫面积
 int32[] trapped_reason         # 被困触发条件
 int32 trapped_count            # 被困次数
 int32 task_status              # 任务状态 0-失败 1-成功
+int32 taskFailReason           # 任务失败原因
 float32 mapped_area            # 建图面积
 int32 untrapped_status         # 脱困状态  0-未脱困 1-脱困
 int32 untrapped_count          # 脱困次数
@@ -69,6 +76,9 @@ int32 wall_avoidance_count     # 避障次数
 # yaw角度，yaw角度占比值
 int32[] wall_move              # 池壁侧移触发原因（池壁）
 int32 wall_move_count          # 池壁侧移次数（池壁）
+
+## 水线清洁信息
+int32 line_avoidance_count     # 避障次数
 
 ## 召回
 int32 recall_status            # 召回状态 0-失败 1-成功

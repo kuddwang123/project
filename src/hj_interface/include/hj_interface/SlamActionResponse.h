@@ -129,12 +129,12 @@ struct MD5Sum< ::hj_interface::SlamActionResponse_<ContainerAllocator> >
 {
   static const char* value()
   {
-    return "f481e6349a18eec3f06d76918cbbc37f";
+    return "7c6f77e680dfd3fe0ca7688763c43452";
   }
 
   static const char* value(const ::hj_interface::SlamActionResponse_<ContainerAllocator>&) { return value(); }
-  static const uint64_t static_value1 = 0xf481e6349a18eec3ULL;
-  static const uint64_t static_value2 = 0xf06d76918cbbc37fULL;
+  static const uint64_t static_value1 = 0x7c6f77e680dfd3feULL;
+  static const uint64_t static_value2 = 0x0ca7688763c43452ULL;
 };
 
 template<class ContainerAllocator>
@@ -165,12 +165,18 @@ struct Definition< ::hj_interface::SlamActionResponse_<ContainerAllocator> >
 "float32 surface_clean_area      # 清洁水面面积 单位：m2\n"
 "float32 bottom_clean_area       # 清洁池底面积\n"
 "float32 wall_clean_area         # 清洁池壁面积\n"
+"float32 water_line_clean_area   # 清洁水线面积\n"
 "float32 pool_area               # 泳池面积\n"
 "float32 pool_volume             # 泳池体积\n"
-"float32 pool_depth              # 泳池深度\n"
+"float32 pool_depth              # 泳池最大深度\n"
+"float32 pool_little_depth       # 泳池最小深度\n"
 "int32   pool_shape              # 泳池形状\n"
-"string map_line_file_path       # 地图轨迹文件路径\n"
+"string  map_line_file_path      # 地图轨迹文件路径\n"
+"int32   avoidObstaclesCount     # 避障次数\n"
+"int32   getOutCount             # 脱困次数\n"
+"int32   multiple_bottom         # 多层池底 1-单层 2-多层\n"
 "\n"
+"#### 以下用于埋点的消息\n"
 "## 清洁事件消息- 还有一部分放在清洁日志消息中\n"
 "int32 start_turbidity          # 起始浊度\n"
 "int32 end_turbidity            # 终止浊度\n"
@@ -190,11 +196,12 @@ struct Definition< ::hj_interface::SlamActionResponse_<ContainerAllocator> >
 "#磁力计信息-半小时1次，单任务6次\n"
 "\n"
 "## 清洁不同区域共同信息\n"
-"int32 mode                     # 清扫模式   1-水面模式 2-池底 3-池壁\n"
+"int32 mode                     # 清扫模式   1-水面模式 2-池底 3-池壁 4-水线\n"
 "float32 clean_area             # 清扫面积\n"
 "int32[] trapped_reason         # 被困触发条件\n"
 "int32 trapped_count            # 被困次数\n"
 "int32 task_status              # 任务状态 0-失败 1-成功\n"
+"int32 taskFailReason           # 任务失败原因\n"
 "float32 mapped_area            # 建图面积\n"
 "int32 untrapped_status         # 脱困状态  0-未脱困 1-脱困\n"
 "int32 untrapped_count          # 脱困次数\n"
@@ -231,6 +238,9 @@ struct Definition< ::hj_interface::SlamActionResponse_<ContainerAllocator> >
 "# yaw角度，yaw角度占比值\n"
 "int32[] wall_move              # 池壁侧移触发原因（池壁）\n"
 "int32 wall_move_count          # 池壁侧移次数（池壁）\n"
+"\n"
+"## 水线清洁信息\n"
+"int32 line_avoidance_count     # 避障次数\n"
 "\n"
 "## 召回\n"
 "int32 recall_status            # 召回状态 0-失败 1-成功\n"

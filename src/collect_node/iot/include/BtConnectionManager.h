@@ -70,6 +70,7 @@ private:
     hj_bf::HJPublisher bt_data_pub_;    
 
     bt_conn_type connState_;
+    std::string machineMode_;
     std::string dataBuf_;
     std::condition_variable cond_;
     std::mutex mtx_;
@@ -98,7 +99,7 @@ private:
     
 private:
     static const int MAX_BT_CACHE_LENGTH = 1024;
-    static const int BLUETOOTH_MTU = 400;
+    static const int BLUETOOTH_MTU = 100;
 };
 
 }

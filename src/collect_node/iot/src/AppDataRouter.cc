@@ -5,16 +5,21 @@
 #include <algorithm>
 #include <aws/crt/UUID.h>
 #include "Utils.h"
+#include "Persistence.h"
 #include <std_msgs/UInt8.h>
 #include <hj_interface/AppOnlineType.h>
 namespace collect_node_iot {
 
-AppDataRouter::AppDataRouter():
+utils::CountDownLatch cdlatch_g(2);
+
+AppDataRouter::AppDataRouter(const std::string& certfile):
     awsConnectionPtr_(AwsConnectionManager::instance()),
     btConnectionPtr_(BtConnectionManager::instance()),
     apConnectionPtr_(ApNetConfigManger::instance()),
     shadowClientLinkPtr_(std::make_shared<IotShadowClientLink>()),
-    iotMqttClientLinkPtr_(std::make_shared<IotMqttClientLink>())
+    iotMqttClientLinkPtr_(std::make_shared<IotMqttClientLink>()),
+    iotRun_(false),
+    certfile_(certfile)
 {
     assert(awsConnectionPtr_);
     assert(btConnectionPtr_);
@@ -48,6 +53,11 @@ void AppDataRouter::initialize(uint16_t port)
     awsConnectionPtr_->addConStatListener(boost::bind(&AppDataRouter::awsConnStaChangeSlot, this,
                                 boost::placeholders::_1));
     
+    awsConnectionPtr_->setSessionDealCb(boost::bind(&AppDataRouter::dealSessionFunc, this,
+                                boost::placeholders::_1));
+
+    Persistence::instance().initialize(shared_from_this());
+
     initRos();
 }
 
@@ -59,15 +69,58 @@ bool AppDataRouter::initIot(
         const std::string& endPoint, 
         const std::string& thingName)
 {
-    if (awsConnectionPtr_->isConnected())
-        awsConnectionPtr_->disconnect();
+    if (awsConnectionPtr_->isConnected()) {
+       awsConnectionPtr_->disconnect();
+       sleep(2);
+    }
 
     if (!awsConnectionPtr_->initialize(cert, key, clientId, endPoint)) {
         HJ_ERROR("aws connection init fail\n");
         return false;
     }
 
-    auto shadowClient = std::make_shared<IotShadowClient>(thingName);
+    return constructAwsMqttConn(thingName);
+}
+
+bool AppDataRouter::restartIot()
+{
+    if (!shadowClientLinkPtr_ || !iotMqttClientLinkPtr_ || !awsConnectionPtr_) {
+        HJ_ERROR("MQTT client not construct!\n");
+        return false;
+    }
+
+    utils::AwsCertParser awsCertParser(certfile_.data());
+    if (!awsCertParser.parseOk()) {
+        HJ_ERROR("cert parse error\n");
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lc(constructIotMtx_);
+    if (!awsConnectionPtr_->initialize(awsCertParser.cert(), 
+                                       awsCertParser.prikey(), 
+                                       awsCertParser.thingname(), 
+                                       awsCertParser.endpoint())) {
+        return false;
+    }
+    
+    if (!constructAwsMqttConn(awsCertParser.thingname())) {
+        return false;
+    }
+
+    return runIot(false);
+}
+
+void AppDataRouter::dealSessionFunc(bool sessionPresent)
+{
+    HJ_INFO("deal session: %d\n", sessionPresent);
+    if (!sessionPresent) {
+        this->restartIot();
+    }
+}
+
+bool AppDataRouter::constructAwsMqttConn(const std::string& thing)
+{
+    auto shadowClient = std::make_shared<IotShadowClient>(thing);
     assert(shadowClient);
 
     if (!shadowClientLinkPtr_->initialize(shadowClient, 
@@ -75,47 +128,97 @@ bool AppDataRouter::initIot(
         HJ_ERROR("shadow client link init fail\n");
         return false;
     }
+    shadowClientLinkPtr_->setShadowUpdateAcceptCb(boost::bind(&AppDataRouter::shadowUpdateAccptCb, this,
+            boost::placeholders::_1));
 
-    auto mqttClient = std::make_shared<IotMqttClient>(thingName);
+    auto mqttClient = std::make_shared<IotMqttClient>(thing);
     assert(mqttClient);
 
-    if (!iotMqttClientLinkPtr_->initialize(mqttClient,
-                    boost::bind(&AppDataRouter::mqttMsgIncomeEvent, this, boost::placeholders::_1))) {
+    if (!iotMqttClientLinkPtr_->initialize(mqttClient)) {
         HJ_ERROR("mqtt client link init fail\n");
         return false;
     }
+    iotMqttClientLinkPtr_->setMqttReqCb(boost::bind(&AppDataRouter::mqttMsgIncomeEvent, this, boost::placeholders::_1));
 
+    awsConnectionPtr_->disconnectAllConnSlots();
     awsConnectionPtr_->addConnSuccSlot(boost::bind(&IotShadowClient::connectSlot, shadowClient));
     awsConnectionPtr_->addDisconSlot(boost::bind(&IotShadowClient::disconnSlot, shadowClient));
     
     awsConnectionPtr_->addConnSuccSlot(boost::bind(&IotMqttClient::connectSlot, mqttClient));
     awsConnectionPtr_->addDisconSlot(boost::bind(&IotMqttClient::disconnSlot, mqttClient));
 
-    awsConnectionPtr_->addConnSuccSlot(boost::bind(&AppDataRouter::connectSlot, this));
     awsConnectionPtr_->addConnFailSlot(boost::bind(&AppDataRouter::connFailSlot, this, 
             boost::placeholders::_1, boost::placeholders::_2));
     
     return true;
 }
 
-bool AppDataRouter::runIot()
+bool AppDataRouter::runIot(bool sync)
 {
     if (!shadowClientLinkPtr_ || !iotMqttClientLinkPtr_ || !awsConnectionPtr_) {
         HJ_ERROR("MQTT client not construct!\n");
         return false;
     }
 
-    awsConnectionPtr_->startConnect();
+    cdlatch_g.resetCount(2);
+    iotRun_ = true;
+
+    if (!awsConnectionPtr_->startConnect(sync)) {
+        HJ_ERROR("start conn fail\n");
+        return false;
+    }
+
+
+    if (!sync) {
+        std::thread th([&]() {
+            this->iotSubscribeDone(true);
+        });
+        th.detach();
+        return true;
+    }
+
+    return iotSubscribeDone(false);
+}
+
+bool AppDataRouter::iotSubscribeDone(bool flag)
+{
+    if (!cdlatch_g.await(flag)) {
+        HJ_ERROR("conn await fail\n");
+        cdlatch_g.resetCount(2);
+        return false;
+    }
+
+    cdlatch_g.resetCount(2);
+    HJ_INFO("conn await success\n");
+    this->connectSlot();
+    this->awsConnStaChangeSlot(true);
 
     return true;
 }
 
-bool AppDataRouter::stopIot()
+bool AppDataRouter::stopIot(bool force)
 {
-    if (awsConnectionPtr_)
+    iotRun_ = false;
+    if (force) {
+        if (awsConnectionPtr_) {
+            updateShadowOffline();
+            sleep(1);
+            awsConnectionPtr_->disconnect();
+        }
+    } else if (awsConnectionPtr_ && awsConnectionPtr_->isConnected()) {
+        updateShadowOffline();
+        sleep(1);
         awsConnectionPtr_->disconnect();
+    }
     
     return true;
+}
+
+void AppDataRouter::unbindIot()
+{
+    HJ_INFO("unbind iot...\n");
+    iotRun_ = false;
+    awsConnectionPtr_->disconnect();
 }
 
 void AppDataRouter::initRos()
@@ -133,31 +236,30 @@ void AppDataRouter::initRos()
     deviceRspApp_ = hj_bf::HJSubscribe("/RespToApp", 50, &AppDataRouter::deviceRespCallBack, this);
 
     deviceReport_ = hj_bf::HJSubscribe("/ReportApp", 50, &AppDataRouter::deviceReportCallBack, this);
+
+    mqttTmr_ = hj_bf::HJCreateTimer("initMqtt", 5 * 1000 * 1000, &AppDataRouter::mqttInitTmrCb, this, false);
 }
 
 void AppDataRouter::connectSlot()
 {
     //成功连接iot core后向服务器更新在线状态
     HJ_INFO("iot conn success, update online\n");
-  
+    //mqttTmr_.start();
     rapidjson::Document document;
     hj_interface::AppMsg appmsg;
     hj_interface::AppData appdata;
 
     document.SetObject();
-    document.AddMember("ble", 2, document.GetAllocator());
-    document.AddMember("ap", 0, document.GetAllocator());
-    document.AddMember("sta", 2, document.GetAllocator());
+    //document.AddMember("ble", 2, document.GetAllocator());
+    //document.AddMember("ap", 0, document.GetAllocator());
+    //document.AddMember("sta", 2, document.GetAllocator());
     document.AddMember("cert", 1, document.GetAllocator());
     document.AddMember("online", 1, document.GetAllocator());
     
     appdata.key = "NetStatReport";
     appdata.payload = utils::documentToString(document);
     appmsg.appdata.push_back(appdata);
-    iotMqttClientLinkPtr_->iotMqttReport(boost::make_shared<hj_interface::AppMsg>(appmsg),
-                    hj_interface::AppMsg::TOPIC);
-
-    updateShadowOnline();
+    iotMqttClientLinkPtr_->iotMqttReport(appmsg, hj_interface::AppMsg::TOPIC);
 
     auto bp = BaseBuryPointFactory::instance().getBuryPoint(BaseBuryPointFactory::kNET_CONFIG);
     assert(bp);
@@ -212,7 +314,7 @@ void AppDataRouter::btConnStaChangeSlot(bool state)
     appdata.key = "NetStat";
     appdata.payload = utils::documentToString(reportDoc);
     appmsg.appdata.push_back(appdata);
-    shadowClientLinkPtr_->dvcUpdateShadow(boost::make_shared<hj_interface::AppMsg>(appmsg));
+    shadowClientLinkPtr_->dvcUpdateShadow(appmsg);
 
     hj_interface::AppOnlineType msg;
 
@@ -241,7 +343,45 @@ void AppDataRouter::updateShadowOnline()
     appdata.key = "NetStat";
     appdata.payload = "{\"online\":1}";
     appmsg.appdata.push_back(appdata);
-    shadowClientLinkPtr_->dvcUpdateShadow(boost::make_shared<hj_interface::AppMsg>(appmsg));
+    shadowClientLinkPtr_->dvcUpdateShadow(appmsg);
+}
+
+void AppDataRouter::updateShadowOffline()
+{
+    HJ_INFO("update shadow offline!\n");
+    hj_interface::AppMsg appmsg;
+    hj_interface::AppData appdata;
+    
+    appdata.key = "NetStat";
+    appdata.payload = "{\"online\":0}";
+    appmsg.appdata.push_back(appdata);
+    shadowClientLinkPtr_->dvcUpdateShadow(appmsg);
+}
+
+void AppDataRouter::mqttInitTmrCb(const hj_bf::HJTimerEvent&)
+{
+    //iotMqttClientLinkPtr_->setMqttReqCb(boost::bind(&AppDataRouter::mqttMsgIncomeEvent, this, boost::placeholders::_1));
+    //mqttTmr_.stop();
+}
+
+void AppDataRouter::shadowUpdateAccptCb(const std::vector<hj_interface::AppData>& data)
+{
+    for (const auto& app: data) {
+        HJ_INFO("shadow update success: %s %s", app.key.c_str(), app.payload.c_str());
+        if (app.key == "NetStat" && iotRun_) {
+            rapidjson::Document doc;
+            if (doc.Parse(app.payload.data()).HasParseError()) {
+                continue;
+            }
+            if (doc.HasMember("online") && doc["online"].IsInt()) {
+                int online = doc["online"].GetInt();
+                if (online == 0) {
+                    HJ_ERROR("shadow online update 0!");
+                    updateShadowOnline();
+                }
+            }
+        }
+    }
 }
 
 void AppDataRouter::deviceReportCallBack(const hj_interface::AppMsg::ConstPtr& msg)
@@ -253,43 +393,22 @@ void AppDataRouter::deviceReportCallBack(const hj_interface::AppMsg::ConstPtr& m
         return;
     }
     
-    for (const auto& appdata:msg->appdata) {
-        HJ_INFO("[%s]\n[%s]\n", appdata.key.c_str(),appdata.payload.c_str());
-    }
+    hj_interface::AppMsg appmsg = *msg.get();
 
-    if (msg->to & hj_interface::AppMsg::TOPIC) {
-        if (iotMqttClientLinkPtr_)
-            iotMqttClientLinkPtr_->iotMqttReport(msg, hj_interface::AppMsg::TOPIC);
-    }
-    
-    if (msg->to & hj_interface::AppMsg::SHADOW) {
-        if (shadowClientLinkPtr_)
-            shadowClientLinkPtr_->dvcUpdateShadow(msg);
-    }
-    
-    if (msg->to & hj_interface::AppMsg::CLOUD) {
-        if (iotMqttClientLinkPtr_)
-            iotMqttClientLinkPtr_->iotMqttReport(msg, hj_interface::AppMsg::CLOUD);
-    }
-    
-    if (msg->to & hj_interface::AppMsg::BIGDATA) {
-        if (iotMqttClientLinkPtr_)
-            iotMqttClientLinkPtr_->iotMqttReport(msg, hj_interface::AppMsg::BIGDATA);
-    }
-
-    if ((msg->to & hj_interface::AppMsg::BLUETOOTH) || btConnectionPtr_->isConnected()) {
-        if (msg->appdata.size() > 1) {
-            HJ_ERROR("report size:%ld not support via bluetooth\n", msg->appdata.size());
-            return;
+    for (auto it = appmsg.appdata.begin(); it != appmsg.appdata.end();) {
+        HJ_INFO("[%s]\n[%s]\n", it->key.c_str(), it->payload.c_str());
+        if (Persistence::instance().needPersistent(it->key)) {
+            Persistence::instance().persistMsg(it->key, it->payload);
+            it = appmsg.appdata.erase(it);
+        } else {
+            ++it;
         }
-
-        btConnectionPtr_->btRpt(msg->appdata.at(0).key, msg->appdata.at(0).payload);
     }
 
-    if (msg->to & hj_interface::AppMsg::AP) {
-        //server 不做主动推送
-        //apConnectionPtr_->apReport(msg->appdata.at(0).key, msg->appdata.at(0).payload);
+    if (!appmsg.appdata.empty()) {
+        doAppMsgReport(appmsg);
     }
+    
     return;
 }
 
@@ -333,6 +452,58 @@ void AppDataRouter::deviceRespCallBack(const hj_interface::AppMsg::ConstPtr& msg
     }
 }
 
+void AppDataRouter::doAppMsgReport(const hj_interface::AppMsg& msg)
+{
+    if (!awsConnectionPtr_->isConnected() && (msg.to != hj_interface::AppMsg::BLUETOOTH &&
+            msg.to != hj_interface::AppMsg::AP)) {
+        return;
+    }
+
+    if (msg.to & hj_interface::AppMsg::TOPIC) {
+        if (iotMqttClientLinkPtr_)
+            iotMqttClientLinkPtr_->iotMqttReport(msg, hj_interface::AppMsg::TOPIC);
+    }
+    
+    if (msg.to & hj_interface::AppMsg::SHADOW) {
+        if (shadowClientLinkPtr_)
+            shadowClientLinkPtr_->dvcUpdateShadow(msg);
+    }
+    
+    if (msg.to & hj_interface::AppMsg::CLOUD) {
+        if (iotMqttClientLinkPtr_)
+            iotMqttClientLinkPtr_->iotMqttReport(msg, hj_interface::AppMsg::CLOUD);
+    }
+    
+    if (msg.to & hj_interface::AppMsg::BIGDATA) {
+        if (iotMqttClientLinkPtr_)
+            iotMqttClientLinkPtr_->iotMqttReport(msg, hj_interface::AppMsg::BIGDATA);
+    }
+
+    if ((msg.to & hj_interface::AppMsg::BLUETOOTH) || btConnectionPtr_->isConnected()) {
+        if (msg.appdata.size() > 1) {
+            HJ_ERROR("report size:%ld not support via bluetooth\n", msg.appdata.size());
+            return;
+        }
+
+        if (msg.to != hj_interface::AppMsg::BIGDATA)
+            btConnectionPtr_->btRpt(msg.appdata.at(0).key, msg.appdata.at(0).payload);
+    }
+
+    if (msg.to & hj_interface::AppMsg::AP) {
+        apConnectionPtr_->apReport(msg.appdata.at(0).key, msg.appdata.at(0).payload, msg.session);
+    }
+}
+
+void AppDataRouter::appDataPub(const hj_interface::AppMsg& appmsg)
+{
+    if(appDataAnalyseCb_) {
+        if (appDataAnalyseCb_(appmsg)) {
+            return;
+        }
+    }
+    appDataPub_.publish(appmsg);
+}
+
 void AppDataRouter::deltaUpdateEvent(hj_interface::AppMsg& data)
 {
     HJ_INFO("delta msg income:\n");
@@ -343,10 +514,7 @@ void AppDataRouter::deltaUpdateEvent(hj_interface::AppMsg& data)
 
     data.from = IOT_SHADOW;
 
-    if(appDataAnalyseCb_)
-        appDataAnalyseCb_(data);
-
-    appDataPub_.publish(data);
+    appDataPub(data);
 }
 
 void AppDataRouter::mqttMsgIncomeEvent(const hj_interface::AppMsg& data)
@@ -357,10 +525,7 @@ void AppDataRouter::mqttMsgIncomeEvent(const hj_interface::AppMsg& data)
         HJ_INFO("\n[%s]\n%s\n", app.key.c_str(), app.payload.c_str());
     }
 
-    if(appDataAnalyseCb_)
-        appDataAnalyseCb_(data);
-
-    appDataPub_.publish(data);
+    appDataPub(data);
 }
 
 void AppDataRouter::btMsgIncomeEvent(const std::string& key, const std::string& payload)
@@ -375,10 +540,7 @@ void AppDataRouter::btMsgIncomeEvent(const std::string& key, const std::string& 
     appmsg.appdata.emplace_back(appdata);
     appmsg.from = BLUETOOTH;
 
-    if(appDataAnalyseCb_)
-        appDataAnalyseCb_(appmsg);
-
-    appDataPub_.publish(appmsg);
+    appDataPub(appmsg);
 }
 
 void AppDataRouter::apMsgIncomeEvent(const std::string& key, const std::string& payload, const std::string& sessId)
@@ -394,10 +556,7 @@ void AppDataRouter::apMsgIncomeEvent(const std::string& key, const std::string& 
     appmsg.from = WIFI;
     appmsg.session = sessId;
 
-    if(appDataAnalyseCb_)
-        appDataAnalyseCb_(appmsg);
-
-    appDataPub_.publish(appmsg);
+    appDataPub(appmsg);
 }
 
 void AppDataRouter::sendAppResp(const hj_interface::AppMsg& msg)

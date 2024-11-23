@@ -206,8 +206,14 @@ bool RecordMsg::initizlize() {
     HJ_ERROR("open out_water_check.log fail\n");
     return false;
   }
+  std::string motor_time = log_prefix_ + "/motor_time.log";
+  std::string imu_time = log_prefix_ + "/imu_time.log";
+  fd_motor_time_ = ::open(motor_time.data(), O_RDWR | O_CREAT | O_TRUNC, 0666);
+  fd_imu_time_ = ::open(imu_time.data(), O_RDWR | O_CREAT | O_TRUNC, 0666);
   // std::array<std
   if (record_all_topics_) {
+    imu_time_sub_ = hj_bf::HJSubscribe("imu_time_chatter", 100, &RecordMsg::WriteImu, this);  // 50HZ
+    motor_tmie_sub_ = hj_bf::HJSubscribe("motor_time_chatter", 100, &RecordMsg::WriteMotor, this);  // 50HZ
     sub_motor_ = hj_bf::HJSubscribe("motor_chatter", 100, &RecordMsg::MotorChatterCallback, this);  // 50HZ
     sub_imu_ = hj_bf::HJSubscribe("imu_chatter", 100, &RecordMsg::ImuChatterCallback, this);  // 100HZ
     sub_mag_ = hj_bf::HJSubscribe("mag_chatter", 100, &RecordMsg::MagChatterCallback, this);  // 100HZ
@@ -315,6 +321,32 @@ bool RecordMsg::initizlize() {
   }
 
   return true;
+}
+
+void RecordMsg::WriteMotor(const hj_interface::Atime::ConstPtr &msg) {
+  {
+    std::lock_guard<std::mutex> msg_lock(mutex_space_);
+    if (!space_enabled_) {
+      return;
+    }
+  }
+  char str[256] = {0};
+  snprintf(str, sizeof(str), "%lf %lf %lu\n",
+          msg->timestamp_current.toSec(), msg->timestamp_origin.toSec(), msg->index);
+  write(fd_motor_time_, str, strlen(str));
+}
+
+void RecordMsg::WriteImu(const hj_interface::Atime::ConstPtr &msg) {
+  {
+    std::lock_guard<std::mutex> msg_lock(mutex_space_);
+    if (!space_enabled_) {
+      return;
+    }
+  }
+  char str[256] = {0};
+  snprintf(str, sizeof(str), "%lf %lf %lu\n",
+          msg->timestamp_current.toSec(), msg->timestamp_origin.toSec(), msg->index);
+  write(fd_imu_time_, str, strlen(str));
 }
 
 void RecordMsg::MotorChatterCallback(const hj_interface::Encoder::ConstPtr &msg) {
@@ -583,9 +615,10 @@ void RecordMsg::BatCallback(const hj_interface::Bat::ConstPtr& msg) {
   oss << std::put_time(ptm, "%Y-%m-%d %H:%M:%S");
 
   char str[128] = {0};
-  snprintf(str, sizeof(str), "%s %d %d %d %d %d %d %d %d\n",
+  snprintf(str, sizeof(str), "%s %d %d %d %d %d %d %d %d %d %d\n",
           oss.str().c_str(), msg->power, msg->temp1, msg->temp2, msg->temp3,
-          msg->bat_vol, msg->bat_disch_cur, msg->ch_vol, msg->charger_ch_cur);
+          msg->bat_vol, msg->bat_disch_cur, msg->ch_vol, msg->charger_ch_cur,
+          msg->bat_cycle_times, msg->bat_health_left);
   write(fd_bat_, str, strlen(str));
 }
 

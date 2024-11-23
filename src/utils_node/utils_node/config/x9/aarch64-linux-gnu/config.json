@@ -1,10 +1,15 @@
 {
-  "so_dir":"./",
+  "so_dir":"/data/hj/lib",
+  "log_path_config":"/data/hj/config/hj_log.config",
+  "all_log_close":true,
+  "node_log_close":false,
+  "node_name":"utils_node",
+  "node_threads":4,
   "functions": [
     {
       "ID": "core_dump",
       "name": "core_dump",
-      "dump_path": "/userdata/hj/log/core_dump/dump_middleware_node"
+      "dump_path": "/userdata/hj/log/core_dump/dump_utils_node"
     },
     {
       "ID": "log_redirect",

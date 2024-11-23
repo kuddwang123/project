@@ -25,6 +25,12 @@ typedef enum {
   ULSOUND_SIDE_BACK_INIT_ERROR = 1017,     // 侧边后面超声启动异常
   ULSOUND_DOWN_LEFT_DATA_ERROR = 1018,     // 下面超声数据读取连续空值
   ULSOUND_DOWN_INIT_ERROR = 1019,          // 下面超声启动异常
+  TUR_DATA_OVERFLOW_ERROR = 1020,          // 浊度计数据持续满值
+  COLLECT_NODE_COREDUMP_ERROR = 1994,       // collect节点coredump
+  MIDDLEWARE_NODE_COREDUMP_ERROR = 1995,    // middleware节点coredump
+  SLAM_NODE_COREDUMP_ERROR = 1996,          // slam节点coredump
+  PLANING_NODE_COREDUMP_ERROR = 1997,       // 规划节点coredump
+  UTILS_NODE_COREDUMP_ERROR = 1998,         // 工具节点coredump
   COLLECT_NODE_MAX = 1999,                 // collect node error code max
 
 
@@ -45,8 +51,9 @@ typedef enum {
 
   // slam_node code
   SLAM_INIT_ERROR = 3000,
-  IMU_CHECK_ERROR = 3001,
-  ENCODER_CHECK_ERROR = 3002,
+  ENCODER_CHECK_ERROR = 3001,
+  IMU_CHECK_ERROR = 3002,
+  ENCODER_IMU_ALIGN_ERROR = 3003,
   SLAM_INIT_DONE = 3999,
 
   // planing_node error_code

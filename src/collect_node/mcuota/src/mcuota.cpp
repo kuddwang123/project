@@ -14,7 +14,7 @@
 #include "hj_interface/OtaUpgradeStatus.h"
 
 HJ_REGISTER_FUNCTION(factory) {
-  std::cerr << "minos register factory" << FUNCTION_NAME << std::endl;
+  HJ_INFO("minos register factory, funtion_name:%s", FUNCTION_NAME);
   factory.registerCreater<collect_node_mcu_ota::McuOta>(FUNCTION_NAME);
 }
 
@@ -73,19 +73,23 @@ void State::setMcuOtaId(uint8_t id)
 }
 
 StartOta::StartOta(int fd, UartOtaDataHandler* uartHandler):
-    State(fd, 5, uartHandler) {}
+    State(fd, 5, uartHandler) {
+    writeTmr_ = hj_bf::HJCreateTimer("startota", 100 * 1000, &StartOta::writeUartTmrCb, this, false);
+}
 
 bool StartOta::handle()
 {
     HJ_INFO("****enter startota****\n");
     HJ_INFO("mcuid:%d\n", mcuid_);
+    /*
     uint8_t ota[] = {0x00, 0x07, 0x00, 0x00, 
                      mcuid_, 
                      0x01, 0x00, 
                      0xff, 0xff, 0xff};
 
     uartHandler_ -> writePackage2Uart(ota, sizeof(ota)/sizeof(uint8_t));
-    
+    */
+    writeTmr_.start();
     int ret = 0;
     fd_set readfds;
     struct timeval timeout;
@@ -127,12 +131,25 @@ bool StartOta::handle()
     STATERET(false, "mcu ota ack timeout!");
 }
 
+void StartOta::writeUartTmrCb(const hj_bf::HJTimerEvent&) {
+    uint8_t ota[] = { 0x00, 0x07, 0x00, 0x00, 
+                      mcuid_, 
+                      0x01, 0x00, 
+                      0xff, 0xff, 0xff};
+
+    uartHandler_ -> writePackage2Uart(ota, sizeof(ota)/sizeof(uint8_t));
+}
+
 FirmwareInfo::FirmwareInfo(int fd, UartOtaDataHandler* uartHandler):
-    State(fd, 5, uartHandler) {}
+    verCount_(3), State(fd, 5, uartHandler) {
+    writeTmr_ = hj_bf::HJCreateTimer("writeFirmHead", 100 * 1000, &FirmwareInfo::writeFirmTmrCb, this, false);
+}
 
 void FirmwareInfo::init(uint32_t size, const std::string& ver) {
     size_ = size;
     ver_ = ver;
+    writeFirmDone_ = false;
+    parsedVerNum_.assign(verCount_, 0);
 }
 
 bool FirmwareInfo::handle() {
@@ -146,6 +163,15 @@ bool FirmwareInfo::handle() {
     uint8_t buf[MAX_PACKAGE_SIZE] = {0};
     uint32_t id = 0;
 
+    if (!parseVer(ver_)) {
+        STATERET(false, "version invalid");
+    }
+
+    for (int i = 0; i < 3; ++i) {
+       HJ_INFO("vernum[%d]=%d\n", i, parsedVerNum_[i]);
+    }
+    HJ_INFO("bin size=%d\n", size_);
+    
     while (timeout.tv_sec > 0) {
         FD_ZERO(&readfds);
         FD_SET(uartPkgFd_, &readfds);
@@ -163,20 +189,31 @@ bool FirmwareInfo::handle() {
             continue;
         else {
             uint8_t cmd = *(buf+4);
-            if (cmd != MCU_REQ_FIRMINFO_CMD)
-                continue;
+            if (cmd != MCU_REQ_FIRMINFO_CMD) {
+                if (cmd == MCU_REQ_BINDATA_CMD) {
+                    HJ_INFO("write firm head done\n");
+                    HJ_INFO("send bin cmd income\n");
+                    break;
+                } else {
+                    continue;
+                }
+            }
+            
             uint8_t mcuid = *(buf+7);
             if(mcuid != mcuid_) {
                 HJ_ERROR("mcu id not equal %x,%x\n", mcuid, mcuid_);
                 STATERET(false, "mcu id not equal");
             }
             
-            break; 
+            HJ_INFO("firminfo request!\n");
+            writeTmr_.start();
+            continue;
         }        
     }
 
-    HJ_INFO("****mcu req fieminfo pass****\n");
+    //HJ_INFO("****mcu req fieminfo pass****\n");
 
+/*
     static uint8_t firmhead[] = {0x00, 0x00, 0x00, 0x00, 
                                  SOC_SEND_FIRMINFO_CMD, 0x00, 0x00,
                                  0xff, 0xff, 0xff, 0xff,             //size
@@ -202,19 +239,38 @@ bool FirmwareInfo::handle() {
     HJ_INFO("bin size=%d\n", size_);
 
     uartHandler_ -> writePackage2Uart(firmhead, sizeof(firmhead)/sizeof(uint8_t));
-
+*/
+    
     STATERET(true, "ok");
 }
 
-bool FirmwareInfo::parseVer(const std::string& ver, uint16_t* out) {
+void FirmwareInfo::writeFirmTmrCb(const hj_bf::HJTimerEvent&) {
+    uint8_t firmhead[] = {0x00, 0x00, 0x00, 0x00, 
+                          SOC_SEND_FIRMINFO_CMD, 0x00, 0x00,
+                          0xff, 0xff, 0xff, 0xff,             //size
+                          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, //ver 
+                          0x0B, 0x00,
+                          0xff, 0xff, 0xff};
+
+    UINT32_TO_BUF_LITTLE(sendDataToMcuId_, firmhead);
+    UINT32_TO_BUF_LITTLE(size_, firmhead+7);
+    UINT16_TO_BUF_LITTLE(parsedVerNum_[0], firmhead+11);
+    UINT16_TO_BUF_LITTLE(parsedVerNum_[1], firmhead+13);
+    UINT16_TO_BUF_LITTLE(parsedVerNum_[2], firmhead+15);
+
+    uartHandler_ -> writePackage2Uart(firmhead, sizeof(firmhead)/sizeof(uint8_t));
+}
+
+bool FirmwareInfo::parseVer(const std::string& ver) {
     std::stringstream ss(ver);
     std::string token;
 
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < verCount_; ++i) {
         if (std::getline(ss, token, '.')) {
-            out[i] = static_cast<uint16_t>(std::stoi(token));
+            parsedVerNum_[i] = static_cast<uint16_t>(std::stoi(token));
         } else {
             HJ_ERROR("parse version wrong:%s", ver.c_str());
+            parsedVerNum_.clear();
             return false;
         }
     }
@@ -223,7 +279,9 @@ bool FirmwareInfo::parseVer(const std::string& ver, uint16_t* out) {
 }
 
 SendBin::SendBin(int fd, UartOtaDataHandler* uartHandler):
-    State(fd, 120, uartHandler) {}
+    State(fd, 120, uartHandler) {
+    writeTmr_ = hj_bf::HJCreateTimer("sendBin", 100 * 1000, &SendBin::sendBinTmrCb, this, false);
+}
 
 void SendBin::init(const std::vector<uint8_t>& data) {
     if (!data_.empty())
@@ -251,7 +309,7 @@ bool SendBin::handle() {
     uint8_t buf[MAX_PACKAGE_SIZE] = {0};
     uint32_t id = 0;
     uint32_t offsetsend = 0;
-    uint32_t offsetlast = 0;
+    uint32_t offsetlast = UINT32_MAX;
 
     while (timeout.tv_sec > 0) {
         FD_ZERO(&readfds);
@@ -383,7 +441,7 @@ bool UartOtaDataHandler::writePackage2Uart(uint8_t *buf, uint32_t len) {
   uint8_t SendBuf[len*2] = {0};
   uint8_t CheckSum = 0;
   
-  HJ_INFO("send bin size:%d\n", len);
+  //HJ_INFO("send bin size:%d\n", len);
 
   pBuf = SendBuf;
   *pBuf++ = FRAMEHEAD;
@@ -411,7 +469,7 @@ bool UartOtaDataHandler::writePackage2Uart(uint8_t *buf, uint32_t len) {
 
   sendlen = pBuf - SendBuf;
   
-  HJ_INFO("uart send len:%d\n", sendlen);
+  //HJ_INFO("uart send len:%d\n", sendlen);
 
   if(uart_) {
     return uart_->send(SendBuf, sendlen);
@@ -793,8 +851,12 @@ void McuOta::mcuOtaCtlCallback(const hj_interface::OtaUpgradeData::ConstPtr& msg
 }
 
 void McuOta::mcuOtaReadyTimerCallBack(const hj_bf::HJTimerEvent&) {
-    HJ_ERROR("mcu ota ready time out\n");
-    pubMcuOtaResult(mcuOtaRun_->getOtaType(), false, "mcu ota ready time out");
+    if (mcuOtaRun_->isOtaRun()) {
+        HJ_ERROR("mcu ota ready time out, but is running\n");
+    } else {
+        HJ_ERROR("mcu ota ready time out\n");
+        pubMcuOtaResult(mcuOtaRun_->getOtaType(), false, "mcu ota ready time out");
+    }
     mcuOtaReadyTmr_.stop();
 }
 

@@ -40,7 +40,7 @@ template<>
 struct MD5Sum< ::hj_interface::RelocalizationResult > {
   static const char* value()
   {
-    return "18b608e8de2e95dfa341e49d5dd45b22";
+    return "ce70405f9e402db3c9c35e66b3d437b4";
   }
 
   static const char* value(const ::hj_interface::RelocalizationResult&) { return value(); }

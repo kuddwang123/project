@@ -26,12 +26,16 @@ struct NaviActionRequest_
   NaviActionRequest_()
     : action_cmd(0)
     , clean_mode(0)
-    , has_map(false)  {
+    , has_map(false)
+    , right_angle(false)
+    , stop_reason(0)  {
     }
   NaviActionRequest_(const ContainerAllocator& _alloc)
     : action_cmd(0)
     , clean_mode(0)
-    , has_map(false)  {
+    , has_map(false)
+    , right_angle(false)
+    , stop_reason(0)  {
   (void)_alloc;
     }
 
@@ -45,6 +49,12 @@ struct NaviActionRequest_
 
    typedef uint8_t _has_map_type;
   _has_map_type has_map;
+
+   typedef uint8_t _right_angle_type;
+  _right_angle_type right_angle;
+
+   typedef uint8_t _stop_reason_type;
+  _stop_reason_type stop_reason;
 
 
 
@@ -77,7 +87,9 @@ bool operator==(const ::hj_interface::NaviActionRequest_<ContainerAllocator1> & 
 {
   return lhs.action_cmd == rhs.action_cmd &&
     lhs.clean_mode == rhs.clean_mode &&
-    lhs.has_map == rhs.has_map;
+    lhs.has_map == rhs.has_map &&
+    lhs.right_angle == rhs.right_angle &&
+    lhs.stop_reason == rhs.stop_reason;
 }
 
 template<typename ContainerAllocator1, typename ContainerAllocator2>
@@ -134,12 +146,12 @@ struct MD5Sum< ::hj_interface::NaviActionRequest_<ContainerAllocator> >
 {
   static const char* value()
   {
-    return "c93baf16004ca5924817d729d06ebba5";
+    return "1b6801697bc667d85ff6c1e70c561a53";
   }
 
   static const char* value(const ::hj_interface::NaviActionRequest_<ContainerAllocator>&) { return value(); }
-  static const uint64_t static_value1 = 0xc93baf16004ca592ULL;
-  static const uint64_t static_value2 = 0x4817d729d06ebba5ULL;
+  static const uint64_t static_value1 = 0x1b6801697bc667d8ULL;
+  static const uint64_t static_value2 = 0x5ff6c1e70c561a53ULL;
 };
 
 template<class ContainerAllocator>
@@ -172,6 +184,8 @@ struct Definition< ::hj_interface::NaviActionRequest_<ContainerAllocator> >
 "                    \n"
 "uint8 clean_mode    # 1: 变频清洁 2: 标准清洁 3: 深度清洁\n"
 "bool  has_map       # true:有  false:没有\n"
+"bool  right_angle   # true:是-整个任务包含池底和池壁  false:否-池底池壁不一起出现在任务中\n"
+"uint8 stop_reason   # 1: 出水停止， 2：其他原因停止\n"
 "\n"
 ;
   }
@@ -194,6 +208,8 @@ namespace serialization
       stream.next(m.action_cmd);
       stream.next(m.clean_mode);
       stream.next(m.has_map);
+      stream.next(m.right_angle);
+      stream.next(m.stop_reason);
     }
 
     ROS_DECLARE_ALLINONE_SERIALIZER
@@ -218,6 +234,10 @@ struct Printer< ::hj_interface::NaviActionRequest_<ContainerAllocator> >
     Printer<uint8_t>::stream(s, indent + "  ", v.clean_mode);
     s << indent << "has_map: ";
     Printer<uint8_t>::stream(s, indent + "  ", v.has_map);
+    s << indent << "right_angle: ";
+    Printer<uint8_t>::stream(s, indent + "  ", v.right_angle);
+    s << indent << "stop_reason: ";
+    Printer<uint8_t>::stream(s, indent + "  ", v.stop_reason);
   }
 };
 

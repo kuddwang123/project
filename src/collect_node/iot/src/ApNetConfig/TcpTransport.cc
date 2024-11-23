@@ -239,7 +239,7 @@ void TcpTransport::socketUpdate(int events)
             HJ_INFO("write %ld bytes to client [%d]\n", len, sockfd_);
         }
     } else if (events & (EPOLLHUP | EPOLLRDHUP)) {
-        HJ_INFO("client socket close!\n");
+        HJ_INFO("client socket [%d] close!\n", sockfd_);
         closeClient();
     }
 }

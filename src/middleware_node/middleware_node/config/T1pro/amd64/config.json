@@ -1,5 +1,11 @@
 {
-  "so_dir":"./",
+  "so_dir":"../../../../../devel/lib",
+  "log_path_config":"../../../../../src/hj_manager/T1pro/config/amd64/hj_log.config",
+  "all_log_close":true,
+  "node_log_close":false,
+  "node_name":"middleware_node",
+  "node_threads":4,
+
   "functions": [
       {
         "ID": "core_dump",

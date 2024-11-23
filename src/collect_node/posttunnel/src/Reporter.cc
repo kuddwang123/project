@@ -7,6 +7,8 @@
 #include "rapidjson/prettywriter.h"
 #include "rapidjson/istreamwrapper.h"
 #include "hj_interface/AppMsg.h"
+#include <dirent.h>
+
 namespace collect_node_posttunnel {
 Reporter::Reporter(uint32_t queuesize, uint32_t loadInterval):
     quit_(false),
@@ -33,7 +35,7 @@ void Reporter::start()
 
     loadFailTmr_ = hj_bf::HJCreateTimer("posttunnl/loadfail", loadIntervalSec_ * 1000 * 1000, &Reporter::loadFailTimerCb, this);
     
-    loadFailMsgs();
+    std::thread([&](){loadFailMsgs();}).detach(); 
 
     msgQueDealThread_ = std::thread(&Reporter::runInThread, this);
 }
@@ -48,10 +50,25 @@ void Reporter::stop()
     }
 }
 
+void Reporter::reset()
+{
+    this->stop();
+    for (const auto& filemsg:failQ_) {
+        filemsg->getCacheHandler().remove();
+        HJ_INFO("[%s] reset!\n", filemsg->getCacheHandler().getFullNameWithPath().c_str());
+    }
+    std::deque<FileMsgPtr> empty;
+    failQ_.swapWithOther(empty);
+    activeQ_.swapWithOther(empty);
+    saveFailMsgs();
+    quit_ = false;
+    msgQueDealThread_ = std::thread(&Reporter::runInThread, this);
+}
+
 void Reporter::uploadFileCallBack(const hj_interface::FileUpload::ConstPtr& msg)
 {
     std::string filepath = msg->filePath;
-    HJ_INFO("receive file upload [%s]\n", filepath.c_str());
+    HJ_INFO("receive file upload [%d] [%s]\n", msg->type, filepath.c_str());
 
     File fileHandler(filepath);
     if (!fileHandler.isAbsolutePath() || !fileHandler.isFileExist()) {
@@ -67,6 +84,12 @@ void Reporter::uploadFileCallBack(const hj_interface::FileUpload::ConstPtr& msg)
 
     std::shared_ptr<FileMessage> filemessagePtr = 
         std::make_shared<FileMessage>(fileHandler, msg->type, msg->deleteOnSuccess);
+    assert(filemessagePtr);
+    
+    if (msg->type == hj_interface::FileUpload::DEVICELOG) {
+        filemessagePtr->setLogId(msg->logId);
+    }
+
     if (!filemessagePtr->getFileHandler().copyFileToOther(filemessagePtr->getCacheHandler())) {
         HJ_ERROR("copy from [%s] to [%s] fail\n", filemessagePtr->getFileHandler().getFullNameWithPath().c_str(),
             filemessagePtr->getCacheHandler().getFullNameWithPath().c_str());
@@ -87,7 +110,7 @@ void Reporter::uploadFileCallBack(const hj_interface::FileUpload::ConstPtr& msg)
 
     if (isIotOnline_) {
         pubToGetUrl(filemessagePtr->getId(), filemessagePtr->getType(),
-            filemessagePtr->getFileHandler().getFileName());
+            filemessagePtr->getFileHandler().getFileName(), filemessagePtr->getLogId());
     }
 } 
 
@@ -105,7 +128,7 @@ void Reporter::appOnlineCallBack(const hj_interface::AppOnlineType::ConstPtr& ms
     }
 }
 
-void Reporter::pubToGetUrl(const std::string& uuid, uint8_t type, const std::string& filename)
+void Reporter::pubToGetUrl(const std::string& uuid, uint8_t type, const std::string& filename, uint64_t logid)
 {
     rapidjson::Document doc;
     rapidjson::StringBuffer buffer;
@@ -116,7 +139,9 @@ void Reporter::pubToGetUrl(const std::string& uuid, uint8_t type, const std::str
     doc.AddMember("type", type, doc.GetAllocator());
     doc.AddMember("uuid", rapidjson::Value(uuid.data(), doc.GetAllocator()).Move(), doc.GetAllocator());
     doc.AddMember("file", rapidjson::Value(filename.data(), doc.GetAllocator()).Move(), doc.GetAllocator());
-
+    if (type == hj_interface::FileUpload::DEVICELOG) {
+        doc.AddMember("controlLogId", logid, doc.GetAllocator());
+    }
     doc.Accept(writer);
 
     hj_interface::AppMsg appPub;
@@ -154,11 +179,11 @@ void Reporter::saveFailMsgs()
             subObject.AddMember("delete", msg->needDeleteOrigin() ? 1 : 0, doc.GetAllocator());
             subObject.AddMember("filepath", rapidjson::Value(msg->getFileHandler().getFullNameWithPath().data(), doc.GetAllocator()).Move(), doc.GetAllocator());
             subObject.AddMember("cachefile", rapidjson::Value(msg->getCacheHandler().getFullNameWithPath().data(), doc.GetAllocator()).Move(), doc.GetAllocator());
-            subObject.AddMember("url", rapidjson::Value(msg->getUrl().data(), doc.GetAllocator()).Move(), doc.GetAllocator());
+            //subObject.AddMember("url", rapidjson::Value(msg->getUrl().data(), doc.GetAllocator()).Move(), doc.GetAllocator());
             subObject.AddMember("md5", rapidjson::Value(msg->getMd5().data(), doc.GetAllocator()).Move(), doc.GetAllocator());
-            subObject.AddMember("expire", msg->getExpire(), doc.GetAllocator());
-            subObject.AddMember("urlts", static_cast<int64_t>(msg->getUrlGenTs()), doc.GetAllocator());
-
+            //subObject.AddMember("expire", msg->getExpire(), doc.GetAllocator());
+            //subObject.AddMember("urlts", static_cast<int64_t>(msg->getUrlGenTs()), doc.GetAllocator());
+            subObject.AddMember("controlLogId", msg->getLogId(), doc.GetAllocator());
             dataArray.PushBack(subObject, doc.GetAllocator());
         }
 
@@ -188,7 +213,7 @@ void Reporter::urlCallBack(const std_msgs::String::ConstPtr& msg)
     std::string url = doc["url"].GetString();
     int32_t expire = doc["urlExpire"].GetInt();
 
-    auto filemsg = failQ_.getById(uuid, true);
+    auto filemsg = failQ_.getById(uuid);
 
     if (!filemsg) {
         HJ_ERROR("msg for id [%s] not exist\n", uuid.c_str());
@@ -232,15 +257,23 @@ std::vector<FileMsgPtr> Reporter::readAllMessages()
         uint8_t need_delete = obj["delete"].GetUint();
         std::string filepath = obj["filepath"].GetString();
         std::string filepathca = obj["cachefile"].GetString();
-        std::string url = obj["url"].GetString();
+        //std::string url = obj["url"].GetString();
         std::string md5 = obj["md5"].GetString();
-        uint32_t expire = obj["expire"].GetInt();
-        int64_t urlts = obj["urlts"].GetInt64();
+        //uint32_t expire = obj["expire"].GetInt();
+        //int64_t urlts = obj["urlts"].GetInt64();
         uint8_t type = obj["type"].GetUint();
-
-        auto filemsg = std::make_shared<FileMessage>(
-            id, type, need_delete, filepath, filepathca, ts, url, md5, expire, urlts);
+        uint64_t logid = 0;
+        if (type == hj_interface::FileUpload::DEVICELOG) {
+            logid = obj["controlLogId"].GetInt64();
+        }
         
+        auto filemsg = std::make_shared<FileMessage>(
+            id, type, need_delete, filepath, filepathca, ts, md5);
+        assert(filemsg);
+
+        if (type == hj_interface::FileUpload::DEVICELOG) {
+            filemsg->setLogId(logid);
+        }
         vecData.emplace_back(filemsg);
     }
 
@@ -256,9 +289,42 @@ void Reporter::failQueueGetUrl()
     {
         std::unique_lock<std::mutex> lock(mtx_);
         for (const auto& failmsg: failQ_) {
-            pubToGetUrl(failmsg->getId(), failmsg->getType(),
-                failmsg->getFileHandler().getFileName());
+            if (failmsg->getUrl().empty() || failmsg->isUrlExpired()) {
+                pubToGetUrl(failmsg->getId(), failmsg->getType(),
+                    failmsg->getFileHandler().getFileName(), failmsg->getLogId());
+            }
         }
+    }
+}
+
+void Reporter::checkCachedFile()
+{
+    DIR *dir = ::opendir(FileMessage::cacheDir.data());
+    if (dir == nullptr) {
+        return;
+    }
+
+    struct dirent *entry;
+    std::string filepath;
+    bool find = false;
+    while ((entry = ::readdir(dir)) != nullptr) {
+        if (strcmp(entry->d_name, ".") != 0 && 
+            strcmp(entry->d_name, "..") != 0 &&
+            strcmp(entry->d_name, "failMsg.json") != 0) {
+            HJ_ERROR("found extra cached file:%s, remove!\n", entry->d_name);
+            find = true;
+            filepath = FileMessage::cacheDir + std::string(entry->d_name);
+            boost::filesystem::remove(boost::filesystem::path(filepath));
+        }
+    }
+
+    closedir(dir);
+
+    if (!find) {
+        HJ_INFO("cached file check pass\n");
+    } else {
+        HJ_ERROR("cached file check fail\n");
+        //throw std::runtime_error("posttunnel cached file check fail");
     }
 }
 
@@ -266,40 +332,59 @@ void Reporter::loadFailMsgs()
 {
     auto localdata = readAllMessages();
     HJ_INFO("load fail msg size:%ld\n", localdata.size());
-    std::deque<FileMsgPtr> faildeque;
     bool activeflag = false;
     bool removeflag = false;
 
     if (localdata.empty()) {
         HJ_INFO("read local data empty\n");
         loadFailTmr_.stop();
+        checkCachedFile();
         return;
     }
 
     for (const auto& filemsg:localdata) {
-        if (filemsg->equalOriginCached()) {
-            if (!filemsg->getUrl().empty() && !filemsg->isUrlExpired()) {
-                activeQ_.pushBack(filemsg);
-                activeflag = true;
-            } else {
-                filemsg->clearUrl();
-                faildeque.emplace_back(filemsg);
-            }
-        } else {
+        if (!filemsg->equalOriginCached()) {
             filemsg->getCacheHandler().remove();
+            auto file = failQ_.getById(filemsg->getId(), true);
             removeflag = true;
             HJ_INFO("[%s] drop!\n", filemsg->getFileHandler().getFullNameWithPath().c_str());
+            continue;
+        }
+
+        FileMsgPtr tmp = failQ_.getById(filemsg->getId());
+        
+        if (tmp) {
+            if (!tmp->isUrlExpired() && tmp->needPersistent()) {
+                tmp->clearFailTimes();
+                activeQ_.pushBack(tmp);
+                activeflag = true;
+                HJ_INFO("msg [%s] not expire, continue upload\n", tmp->getId().c_str());
+            } else if (!tmp->getUrl().empty() && tmp->isUrlExpired()) {
+                tmp->clearUrl();
+                if (isIotOnline_) {
+                    pubToGetUrl(tmp->getId(), tmp->getType(),
+                        tmp->getFileHandler().getFileName(), tmp->getLogId());
+                    HJ_INFO("msg [%s] expired, get url again\n", tmp->getId().c_str());
+                } else {
+                    HJ_INFO("msg [%s] expired, iot not online\n", tmp->getId().c_str());
+                }
+            } else if (tmp->getUrl().empty() ){
+                HJ_INFO("msg [%s] url empty, get url\n", tmp->getId().c_str());
+                if (isIotOnline_) {
+                    pubToGetUrl(tmp->getId(), tmp->getType(),
+                        tmp->getFileHandler().getFileName(), tmp->getLogId());
+                }
+            } else {
+                HJ_INFO("msg [%s] exists in local fail, skip\n", tmp->getId().c_str());
+            }
+            continue;
+        } else {
+            failQ_.pushBack(filemsg);
         }
     }
 
-    failQ_.swapWithOther(faildeque);
-
     if (removeflag) {
         saveFailMsgs();
-    }
-
-    if (!failQ_.isEmpty()) {
-        failQueueGetUrl();
     }
 
     if (activeflag) {
@@ -334,11 +419,11 @@ void Reporter::reportMsg(const FileMsgPtr& msg)
 void Reporter::reportMsgInThread(const FileMsgPtr& msg)
 {
     Curl curl;
-    curl.setTimeout(60);
-    curl.setConnectTimeout(60);
+    //curl.setTimeout(120);
+    //curl.setConnectTimeout(10);
     curl.addHeader("Content-Length", std::to_string(msg->getFileHandler().getFileSize()));
     curl.setUrl(msg->getUrl());
-    curl.put(msg->getFileHandler().getFullNameWithPath(), msg->getFileHandler().getFileSize());
+    curl.put(msg->getCacheHandler().getFullNameWithPath(), msg->getCacheHandler().getFileSize());
 
     auto respcode = curl.getResponseCode();
     if (respcode == 200) {
@@ -353,10 +438,7 @@ void Reporter::reportMsgInThread(const FileMsgPtr& msg)
     } else {
         HJ_INFO("[%s] upload fail:%ld!\n", msg->getFileHandler().getFullNameWithPath().c_str(), curl.getResponseCode());
         msg->incrFailTimes();
-        if (msg->needPersistent()) {
-            msg->clearFailTimes();
-            failQ_.pushBack(msg);
-        } else {
+        if (!msg->needPersistent()) {
             activeQ_.pushBack(msg);
             cond_.notify_one();
         }
@@ -380,7 +462,7 @@ void Reporter::runInThread()
         }
 
         if (quit_) {
-            failQ_ += activeQ_;
+            //failQ_ += activeQ_;
             saveFailMsgs();
             break;
         }
@@ -408,8 +490,7 @@ void Reporter::runInThread()
             }
 
             if (msg->isUrlExpired()) {
-                msg->clearUrl();
-                failQ_.pushBack(msg);
+                HJ_INFO("url expired while uploading for [%s]\n", msg->getId().c_str());
                 continue;
             }
 

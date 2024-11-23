@@ -50,11 +50,21 @@ bool BtConnectionManager::initialize()
     btDataParseThread_ = std::thread(&BtConnectionManager::btDataParseThread, this);
     btDataParseThread_.detach();
     
+    utils::DevInfo devinfo("/tmp/devInfo.json");
+    if (devinfo.openSucc()) {
+        machineMode_ = devinfo.mode();
+        HJ_INFO("get machine mode: %s\n", machineMode_.c_str());
+    }
+
     return true;
 }
 
 void BtConnectionManager::btRpt(const std::string& key, const std::string& payload)
 {
+    if (machineMode_ != "normal") {
+        return;
+    }
+
     rapidjson::Document doc;
     doc.SetObject();
     rapidjson::Document subdoc;
@@ -239,6 +249,10 @@ void BtConnectionManager::btDataParseThread()
         std::string key;
         std::string payload;
         bool ret = false;
+        /*
+        if (machineMode_ == "fac") {
+            buf = utils::removeChar(buf, '\r');
+        }*/
         if (ret = btDataParser(buf, key, payload)) {
             //call func 
             //1. analyse is netconfig corresponding

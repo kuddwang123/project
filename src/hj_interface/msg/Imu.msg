@@ -8,4 +8,5 @@ int16 gyro_z
 int16 accel_x
 int16 accel_y
 int16 accel_z
+uint8 flag    # 自校准状态：[0x00]未进入；[0x01]已进入
 uint64 index

@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS message_generation rostime roscpp std_ms
 add_message_files(
   FILES
   Mag.msg
+  MagOutput.msg
   Bat.msg
   Encoder.msg
   Imu.msg
@@ -26,6 +27,7 @@ add_message_files(
   Pose.msg
   AirBag.msg
   FlipCover.msg
+  FlipCoverAck.msg
   NaviWheel.msg
   SelfCleanMotor.msg
   SteerAndPump.msg
@@ -80,6 +82,16 @@ add_message_files(
   SysAction.msg
   CollectBroadcast.msg
   NaviToSlamRotate.msg
+  EntryWaterPoint.msg
+  SensorTemp.msg
+  SensorDataRecord.msg
+  LedByTask.msg
+  BootType.msg
+  WirelessCharging.msg
+  AirBagFactoty.msg
+  AirBagStatus.msg
+  McuSensorStatus.msg
+  McuSensorStatusT1.msg
 )
 
 add_service_files(
@@ -90,7 +102,10 @@ add_service_files(
   SlamAction.srv
   SlamNaviWorkResult.srv
   MagCalibAction.srv
+  airBagControl.srv
   RelocalizationResult.srv
+  AlgWorkResult.srv
+  ErrorCodeStatistic.srv
 )
 
 generate_messages(DEPENDENCIES std_msgs geometry_msgs)

@@ -1,15 +1,20 @@
 {
-  "so_dir":"./",
+  "so_dir":"/data/hj/lib",
+  "log_path_config":"/data/hj/config/hj_log.config",
+  "all_log_close":true,
+  "node_log_close":false,
+  "node_name":"collect_node",
+  "node_threads":4,
   "functions": [
       {
         "ID": "core_dump",
         "name": "core_dump",
-        "dump_path": "/tmp/dump_collect_node"
+        "dump_path": "/userdata/hj/log/core_dump/dump_collect_node"
       },
       {
         "ID": "log_redirect",
         "name": "log_redirect",
-        "err_log_file_path": "",
+        "err_log_file_path": "/userdata/hj/log/logging/",
         "cout_log_file_path": ""
       },
       {
@@ -20,7 +25,12 @@
       {
         "ID": "ulsound",
         "name": "ulsound",
-        "test_transmit": "well come ulsound"
+        "front_dev": "/dev/ttyS5",
+        "side_dev_back": "/dev/ttyWCH2",
+        "side_dev_front": "/dev/ttyWCH3",
+        "down_dev": "/dev/ttyWCH0",
+        "project_number": "x9",
+        "machine_version": "P4"
       },
       {
         "ID": "turbidity",
@@ -28,9 +38,19 @@
         "frequency": 1000
       },
       {
+        "ID": "pressure",
+        "name": "pressure",
+        "pressure": 1000
+      },
+      {
+        "ID": "self_check",
+        "name": "self_check"
+      },
+      {
         "ID": "mcu",
         "name": "mcu",
         "enable_keylog":1,
+        "machine_version": "P4",
         "mcu_para":{
           "port":"/dev/ttyS0",
           "baudRate":500000,
@@ -43,6 +63,7 @@
       {
         "ID": "mcuota",
         "name": "mcuota",
+        "log":"/userdata/hj/log/mcuota.log",
         "mcu_para":{
           "port":"/dev/ttyS0",
           "baudRate":500000,
@@ -55,34 +76,30 @@
       {
         "ID": "iot",
         "name": "iot",
-        "cert_dir":"/userdata/.cert"
+        "tcpPort":8888,
+        "projectName": "x9"
       },
       {
-        "ID": "pressure",
-        "name": "pressure",
-        "pressure": 1000
-      },
-      {
-        "ID": "imu",
-        "name": "imu",
-        "frequency": 2
-      },
-      {
-        "ID": "record_msg",
-        "name": "record_msg",
-        "enable": 1,
-        "dir":"/userdata/hj/log/sensor_data",
-        "space_limit": 360
+        "ID": "utils_func",
+        "name": "utils_func",
+        "record_param_alg": {
+          "enable": 1,
+          "task_enable": 1,
+          "dir":"/userdata/hj/log/sensor_data_alg",
+          "space_limit": 300,
+          "machine_version": "P3.5"
+        },
+        "record_param_other": {
+          "enable": 1,
+          "dir":"/userdata/hj/log/sensor_data_other",
+          "space_limit": 10
+        }
       },
       {
         "ID": "posttunnel",
         "name": "posttunnel",
-	"queueSize":100,
-	"loadFailSec":60
-      },
-      {
-        "ID": "self_check",
-        "name": "self_check"
+        "queueSize":100,
+        "loadFailSec":60
       }
   ]
 }

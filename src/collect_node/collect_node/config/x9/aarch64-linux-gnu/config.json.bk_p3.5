@@ -1,0 +1,99 @@
+{
+  "so_dir":"./",
+  "functions": [
+      {
+        "ID": "core_dump",
+        "name": "core_dump",
+        "dump_path": "/userdata/hj/log/core_dump/dump_collect_node"
+      },
+      {
+        "ID": "log_redirect",
+        "name": "log_redirect",
+        "err_log_file_path": "/userdata/hj/log/logging/",
+        "cout_log_file_path": ""
+      },
+      {
+        "ID": "magnetometers",
+        "name": "magnetometers",
+        "frequency": 10
+      },
+      {
+        "ID": "ulsound",
+        "name": "ulsound",
+        "front_dev": "/dev/ttyS5",
+        "side_dev_back": "/dev/ttyWCH2",
+        "side_dev_front": "/dev/ttyWCH3",
+        "down_dev": "/dev/ttyWCH0",
+        "machine_version": "P3.5"
+      },
+      {
+        "ID": "turbidity",
+        "name": "turbidity",
+        "frequency": 1000
+      },
+      {
+        "ID": "pressure",
+        "name": "pressure",
+        "pressure": 1000
+      },
+      {
+        "ID": "imu",
+        "name": "imu",
+        "frequency": 0.002
+      },
+      {
+        "ID": "self_check",
+        "name": "self_check"
+      },
+      {
+        "ID": "mcu",
+        "name": "mcu",
+        "enable_keylog":1,
+        "machine_version": "P3.5",
+        "mcu_para":{
+          "port":"/dev/ttyS0",
+          "baudRate":500000,
+          "flowCtl":0,
+          "dataBits":8,
+          "stopBits":1,
+          "parity":"N"
+        }
+      },
+      {
+        "ID": "mcuota",
+        "name": "mcuota",
+        "log":"/userdata/hj/log/mcuota.log",
+        "mcu_para":{
+          "port":"/dev/ttyS0",
+          "baudRate":500000,
+          "flowCtl":0,
+          "dataBits":8,
+          "stopBits":1,
+          "parity":"N"
+        }
+      },
+      {
+        "ID": "iot",
+        "name": "iot",
+        "tcpPort":8888,
+        "projectName": "x9"
+      },
+      {
+        "ID": "utils_func",
+        "name": "utils_func",
+        "record_param": {
+          "enable": 1,
+          "dir":"/userdata/hj/log/sensor_data",
+          "space_limit": 516,
+          "machine_version": "P3.5",
+          "topics": ["all"]
+        }
+      },
+      {
+        "ID": "posttunnel",
+        "name": "posttunnel",
+        "queueSize":100,
+        "loadFailSec":60
+      }
+  ]
+}

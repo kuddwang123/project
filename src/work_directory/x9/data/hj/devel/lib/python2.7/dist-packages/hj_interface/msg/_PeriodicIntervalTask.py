@@ -9,12 +9,13 @@ import struct
 import hj_interface.msg
 
 class PeriodicIntervalTask(genpy.Message):
-  _md5sum = "1baf03ed10d0fc70b5b1affa93a375ee"
+  _md5sum = "3ff5b99bf0eb1cd7b60781ad216dc604"
   _type = "hj_interface/PeriodicIntervalTask"
   _has_header = False  # flag to mark the presence of a Header object
   _full_text = """string name_id
 string date
 string start_time
+int32 smart        # 0-普通模式 1-智能模式
 int32 interval_days
 CleanAreas[] clean_areas
 int32 clean_mode   # 1-变频 2-标准 3-深度
@@ -23,8 +24,8 @@ MSG: hj_interface/CleanAreas
 int32 clean_area  #清扫区域 1-水面 2-池底 3-池壁
 int32 count       #清扫次数
 int32 time        #清扫时间单位分钟"""
-  __slots__ = ['name_id','date','start_time','interval_days','clean_areas','clean_mode']
-  _slot_types = ['string','string','string','int32','hj_interface/CleanAreas[]','int32']
+  __slots__ = ['name_id','date','start_time','smart','interval_days','clean_areas','clean_mode']
+  _slot_types = ['string','string','string','int32','int32','hj_interface/CleanAreas[]','int32']
 
   def __init__(self, *args, **kwds):
     """
@@ -34,7 +35,7 @@ int32 time        #清扫时间单位分钟"""
     changes.  You cannot mix in-order arguments and keyword arguments.
 
     The available fields are:
-       name_id,date,start_time,interval_days,clean_areas,clean_mode
+       name_id,date,start_time,smart,interval_days,clean_areas,clean_mode
 
     :param args: complete set of field values, in .msg order
     :param kwds: use keyword arguments corresponding to message field names
@@ -49,6 +50,8 @@ int32 time        #清扫时间单位分钟"""
         self.date = ''
       if self.start_time is None:
         self.start_time = ''
+      if self.smart is None:
+        self.smart = 0
       if self.interval_days is None:
         self.interval_days = 0
       if self.clean_areas is None:
@@ -59,6 +62,7 @@ int32 time        #清扫时间单位分钟"""
       self.name_id = ''
       self.date = ''
       self.start_time = ''
+      self.smart = 0
       self.interval_days = 0
       self.clean_areas = []
       self.clean_mode = 0
@@ -93,8 +97,8 @@ int32 time        #清扫时间单位分钟"""
         _x = _x.encode('utf-8')
         length = len(_x)
       buff.write(struct.Struct('<I%ss'%length).pack(length, _x))
-      _x = self.interval_days
-      buff.write(_get_struct_i().pack(_x))
+      _x = self
+      buff.write(_get_struct_2i().pack(_x.smart, _x.interval_days))
       length = len(self.clean_areas)
       buff.write(_struct_I.pack(length))
       for val1 in self.clean_areas:
@@ -143,9 +147,10 @@ int32 time        #清扫时间单位分钟"""
         self.start_time = str[start:end].decode('utf-8', 'rosmsg')
       else:
         self.start_time = str[start:end]
+      _x = self
       start = end
-      end += 4
-      (self.interval_days,) = _get_struct_i().unpack(str[start:end])
+      end += 8
+      (_x.smart, _x.interval_days,) = _get_struct_2i().unpack(str[start:end])
       start = end
       end += 4
       (length,) = _struct_I.unpack(str[start:end])
@@ -190,8 +195,8 @@ int32 time        #清扫时间单位分钟"""
         _x = _x.encode('utf-8')
         length = len(_x)
       buff.write(struct.Struct('<I%ss'%length).pack(length, _x))
-      _x = self.interval_days
-      buff.write(_get_struct_i().pack(_x))
+      _x = self
+      buff.write(_get_struct_2i().pack(_x.smart, _x.interval_days))
       length = len(self.clean_areas)
       buff.write(_struct_I.pack(length))
       for val1 in self.clean_areas:
@@ -241,9 +246,10 @@ int32 time        #清扫时间单位分钟"""
         self.start_time = str[start:end].decode('utf-8', 'rosmsg')
       else:
         self.start_time = str[start:end]
+      _x = self
       start = end
-      end += 4
-      (self.interval_days,) = _get_struct_i().unpack(str[start:end])
+      end += 8
+      (_x.smart, _x.interval_days,) = _get_struct_2i().unpack(str[start:end])
       start = end
       end += 4
       (length,) = _struct_I.unpack(str[start:end])
@@ -266,6 +272,12 @@ _struct_I = genpy.struct_I
 def _get_struct_I():
     global _struct_I
     return _struct_I
+_struct_2i = None
+def _get_struct_2i():
+    global _struct_2i
+    if _struct_2i is None:
+        _struct_2i = struct.Struct("<2i")
+    return _struct_2i
 _struct_3i = None
 def _get_struct_3i():
     global _struct_3i

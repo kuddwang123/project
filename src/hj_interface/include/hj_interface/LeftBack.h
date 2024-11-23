@@ -160,7 +160,7 @@ struct Definition< ::hj_interface::LeftBack_<ContainerAllocator> >
   {
     return "time timestamp \n"
 "uint32 dist  #!< 左后超声波距离,单位:mm.\n"
-"uint8 status #!< 超声波状态,0 means normal,1 means error.\n"
+"uint8 status #!< 超声波状态,0 means normal,1 means error,2 means 传感器出水.\n"
 ;
   }
 
