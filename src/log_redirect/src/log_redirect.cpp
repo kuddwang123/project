@@ -9,6 +9,7 @@
 
 #include "fstream"
 #include "log.h"
+#include "hj_utils.h"
 HJ_REGISTER_FUNCTION(factory) {
   HJ_IMPORTANT("minos register factory:%s", FUNCTION_NAME);
   factory.registerCreater<log_redirect_ns::LogRedirect>(FUNCTION_NAME);
@@ -216,7 +217,9 @@ int OperateDir::_CopyList(const std::string &srcDirPath, const std::string &desD
   }
   return 0;
 }
-
+std::ofstream ofile;
+std::mutex file_write_mutex;
+ 
 static void WriteLogErrTread(size_t max_file_size, const std::string &file_dir_path) {
   prctl(PR_SET_NAME, "log_err_file");
   // 重定向stderr
@@ -225,44 +228,45 @@ static void WriteLogErrTread(size_t max_file_size, const std::string &file_dir_p
   int filesIndex = 0;
   std::string localfileName = se_fn + std::to_string(filesIndex);
   HJ_IMPORTANT("WriteLogErrTread, file name:%s", localfileName.c_str());
+
+
   while (1) {
-    if (log_fd < 0) {
-      log_fd = open(localfileName.c_str(), O_RDWR | O_CREAT | O_APPEND, 0644);
-      if (log_fd != -1) {
-        dup2(log_fd, STDERR_FILENO);
+    std::unique_lock<std::mutex> lk(file_write_mutex);
+    if (!ofile.is_open()) {
+      ofile.open(localfileName, std::ios::app);
+      if (ofile.is_open()) {
       } else {
+        lk.unlock();
+        HJ_IMPORTANT("WriteLogErrTread, cant open file:%s", localfileName.c_str());
         sleep(1);
       }
     } else {
+      lk.unlock();
       struct stat info;
       stat(localfileName.c_str(), &info);
       int size = info.st_size;
       if (size > max_file_size) {
-        while (1) {
-          filesIndex++;
-          if (filesIndex >= 2) {
-            filesIndex = 0;
-          }
-          localfileName = se_fn + std::to_string(filesIndex);
-          int ret = close(log_fd);
-          if (!ret) {
-            log_fd = -1;
-            OperateDir dir;
-            int state = access(localfileName.c_str(), R_OK | W_OK);
-            if (state == 0) {
-              if (dir.IsFile(localfileName)) {
-                struct stat info;
-                stat(localfileName.c_str(), &info);
-                int size = info.st_size;
-                if (size > max_file_size) {
-                  remove(localfileName.c_str());
-                }
-              }
+        filesIndex++;
+        if (filesIndex >= 2) {
+          filesIndex = 0;
+        }
+        localfileName = se_fn + std::to_string(filesIndex);
+        lk.lock();
+        ofile.close();
+        lk.unlock();
+        OperateDir dir;
+        int state = access(localfileName.c_str(), R_OK | W_OK);
+        if (state == 0) {
+          if (dir.IsFile(localfileName)) {
+            struct stat info;
+            stat(localfileName.c_str(), &info);
+            int size = info.st_size;
+            if (size > max_file_size) {
+              remove(localfileName.c_str());
             }
-
-            break;
           }
         }
+
       } else {
         sleep(1);
       }
@@ -309,6 +313,78 @@ static void WriteLogCoutTread(size_t max_file_size, const std::string &file_dir_
   }
   return;
 }
+
+void WritePipe(size_t max_file_size, const std::string &file_dir_path, int pipe_fd) {
+  auto se_fn = file_dir_path + "/log_err";
+  int log_fd = -1;
+  int filesIndex = 0;
+  std::string localfileName = se_fn + std::to_string(filesIndex);
+  int real_read;
+  char buffer[512];
+  int buffer_size = sizeof(buffer);
+  ROS_INFO("IN WritePipe");
+  while (!ofile.is_open()) {
+    ofile.open(localfileName, std::ios::app);
+    if (ofile.is_open()) {
+    } else {
+      HJ_IMPORTANT("WritePipe, cant open file:%s", localfileName.c_str());
+      sleep(1);
+    }
+  }
+  while (true) {
+    memset(buffer, '\0', buffer_size);
+    real_read = read(pipe_fd, buffer, sizeof(buffer));
+    if (real_read < 0) {
+      if (errno != EAGAIN) {
+        throw std::runtime_error("get the fd error != EAGAIN");
+      } else {
+        ROS_INFO("while here :%d",errno);
+
+        // break;
+      }
+    } else if (!real_read) {
+      throw std::runtime_error("the fd should not be close!");
+    } else {
+      ofile << hj_bf::getTimeNowStr("", 0) << buffer << std::endl;
+
+      struct stat info;
+      stat(localfileName.c_str(), &info);
+      int size = info.st_size;
+      if (size > max_file_size) {
+        filesIndex++;
+        if (filesIndex >= 2) {
+          filesIndex = 0;
+        }
+        localfileName = se_fn + std::to_string(filesIndex);
+        ofile.close();
+        OperateDir dir;
+        int state = access(localfileName.c_str(), R_OK | W_OK);
+        if (state == 0) {
+          if (dir.IsFile(localfileName)) {
+            struct stat info;
+            stat(localfileName.c_str(), &info);
+            int size = info.st_size;
+            if (size > max_file_size) {
+              remove(localfileName.c_str());
+            }
+          }
+        }
+
+        while (!ofile.is_open()) {
+          ofile.open(localfileName, std::ios::app);
+          if (ofile.is_open()) {
+          } else {
+            HJ_IMPORTANT("WritePipe, cant open file:%s", localfileName.c_str());
+            sleep(1);
+          }
+        }
+
+      }
+    }
+  }
+  ROS_INFO("FdcCallback triggered");
+}
+
 LogRedirect::LogRedirect(const rapidjson::Value &json_conf) : hj_bf::Function(json_conf) {
   int err_log_file_size = DEFAULT_ERR_FILE_SIZE;
   std::string err_log_file_path = DEFAULT_ERR_FILE_PATH;
@@ -354,12 +430,30 @@ LogRedirect::LogRedirect(const rapidjson::Value &json_conf) : hj_bf::Function(js
   } else {
     mkdir(err_log_file_path.c_str(), 0777);
   }
-  // your code
-  std::thread t_err(WriteLogErrTread, 10 * 1024 * 1024, err_log_file_path);
+  HJ_IMPORTANT("minos just a LogRedirect 0");
+  int fds_[2];
+  if (pipe(fds_) == -1) {
+    exit(EXIT_FAILURE);
+  }
+  // int flag = fcntl(fds_[1], F_GETFL);
+  // flag |= O_NONBLOCK;
+  // fcntl(fds_[1], F_SETFL, flag);
+  // HJ_IMPORTANT("minos just a LogRedirect 0.2");
+  // flag = fcntl(fds_[0], F_GETFL);
+  // flag |= O_NONBLOCK;
+  // fcntl(fds_[0], F_SETFL, flag);
+  // HJ_IMPORTANT("minos just a LogRedirect 0.1");
+  dup2(fds_[1], STDERR_FILENO);
+  HJ_IMPORTANT("minos just a LogRedirect 1");
+  std::thread t_err(WritePipe, 1 * 1024 * 1024, err_log_file_path, fds_[0]);
   t_err.detach();
+
+  // your code
+  // std::thread t_err(WriteLogErrTread, 10 * 1024 * 1024, err_log_file_path);
+  // t_err.detach();
   //  std::thread t_cout(WriteLogCoutTread, cout_log_file_size, cout_log_file_path);
   //  t_cout.detach();
-  HJ_IMPORTANT("minos just a LogRedirect");
+  HJ_IMPORTANT("minos just a LogRedirect new");
 }
 
 }  // namespace log_redirect_ns
