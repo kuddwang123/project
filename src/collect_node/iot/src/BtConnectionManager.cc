@@ -162,7 +162,15 @@ bool BtConnectionManager::btDataParser(const std::string in, std::string& rnout,
 {
     rapidjson::Document document;
 
-    std::string base64DecodeString = base64_decode(in, true);
+    bool base64succ = false;
+
+    std::string base64DecodeString = base64_decode(in, base64succ, true);
+    
+    if (!base64succ) {
+        HJ_ERROR("decode fail:%s\n", in.c_str());
+        return false;
+    }
+
     std::string xorDecodeString = utils::xor_encrypt(base64DecodeString);
     std::string datakey;
     std::string datavalue;

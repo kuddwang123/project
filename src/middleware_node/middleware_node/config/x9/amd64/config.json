@@ -5,7 +5,7 @@
   "node_log_close":false,
   "node_name":"middleware_node",
   "node_threads":4,
-
+  "remote_config_path":"/tmp/hj/config",
   "functions": [
       {
         "ID": "core_dump",
@@ -17,11 +17,6 @@
         "name": "log_redirect",
         "err_log_file_path": "/tmp/logging",
         "cout_log_file_path": ""
-      },
-      {
-        "ID": "ota_schedule",
-        "name": "ota_schedule",
-        "test_transmit": "well come ota_schedule"
       },
       {
         "ID": "parse_sys_com",

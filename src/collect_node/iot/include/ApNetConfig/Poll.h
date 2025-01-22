@@ -26,7 +26,7 @@ private:
     }socketInfo;
 
     static Poll* instance_;
-    std::mutex mtx_;
+    std::recursive_mutex r_mtx_;
     bool isRun_;
     int epollfd_;
     int timeout_;

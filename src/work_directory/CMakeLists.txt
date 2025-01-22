@@ -5,7 +5,7 @@ set( HJ_WORKSPACE_PATH "../..")
 set(PROJECT_NUMBER "x9" CACHE STRING "project number, such as 2312")
 message("Current project number is ${PROJECT_NUMBER}")
 add_definitions(-DPROJECT_NUMBER=${PROJECT_NUMBER})
-
+set(RELEASE_VER "debug" CACHE STRING "debug or release")
 set(PLATFORM "aarch64-linux-gnu" CACHE STRING "amd64, i386, arm64_rk, etc.")
 
 catkin_package(CATKIN_DEPENDS message_runtime std_msgs)
@@ -50,7 +50,7 @@ add_custom_target(
 
   # copy config files
   COMMAND
-  cp -rf ${CATKIN_DEVEL_PREFIX}/../src/hj_manager/${PROJECT_NUMBER}/config/aarch64-linux-gnu/* ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NUMBER}/data/hj/config
+  cp -rf ${CATKIN_DEVEL_PREFIX}/../src/hj_manager/${PROJECT_NUMBER}/config/aarch64-linux-gnu/${RELEASE_VER}/* ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NUMBER}/data/hj/config
   COMMAND
   cp -rf ${CATKIN_DEVEL_PREFIX}/../src/collect_node/collect_node/config/${PROJECT_NUMBER}/aarch64-linux-gnu/config.json ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NUMBER}/data/hj/config/collect_node
   COMMAND

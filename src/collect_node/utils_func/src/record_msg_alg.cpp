@@ -16,6 +16,7 @@
 #include <dirent.h>
 #include "record_msg_alg.h"
 #include "log.h"
+#include "hjlog.h"
 #include "boost/filesystem.hpp"
 #include "hj_interface/FileUpload.h"
 
@@ -39,10 +40,10 @@ void RecordMsg::SubTopic() {
   sub_down_left_ = hj_bf::HJSubscribe("x9/down_left", 100, &RecordMsg::DownLeftCallback, this);
   sub_down_right_ = hj_bf::HJSubscribe("x9/down_right", 100, &RecordMsg::DownRightCallback, this);
 #endif
-  // task sub
-  task_sub_ = hj_bf::HJSubscribe("sensor_data_record", 10, &RecordMsg::DealTaskCallback, this);
-  upload_sub_ = hj_bf::HJSubscribe("/upload_msg", 1, &RecordMsg::UploadCallback, this);
-  pub_upload_ = hj_bf::HJAdvertise<hj_interface::FileUpload>("/upload/file", 10);
+  sub_motor_cur_ = hj_bf::HJSubscribe("motor_cur", 10, &RecordMsg::MotorCurCallback, this);
+  sub_wireless_charging_ = hj_bf::HJSubscribe("/wireless_charging_chatter", 10, &RecordMsg::WirelessChargingCallback, this);
+  // upload_sub_ = hj_bf::HJSubscribe("/upload_msg", 1, &RecordMsg::UploadCallback, this);
+  // pub_upload_ = hj_bf::HJAdvertise<hj_interface::FileUpload>("/upload/file", 10);
 }
 
 bool RecordMsg::OpenLogFile(const std::string& log_prefix) {
@@ -142,6 +143,52 @@ bool RecordMsg::OpenLogFile(const std::string& log_prefix) {
   fd_imu_time_ = ::open(imu_time.data(), O_RDWR | O_CREAT | O_TRUNC, 0666);
 
   return true;
+}
+
+void RecordMsg::MotorCurCallback(const hj_interface::ElecMotorCur::ConstPtr& msg) {
+  ros::Time time_now = msg->custom_time;
+  std::time_t time_c = time_now.sec;
+  std::tm *ptm = std::localtime(&time_c);
+  std::ostringstream oss;
+  oss << std::put_time(ptm, "%Y-%m-%d %H:%M:%S");
+#ifdef HJ_RELEASE_VER
+  static int motor_cur_count = 0;
+  motor_cur_count++;
+  if (motor_cur_count == 30) {
+    msg_append(motor_cur_logger_, "%s %d %d %d %d %d %d %d %d\n", oss.str().c_str(),
+          msg->motor_l, msg->motor_r, msg->pump_l,
+          msg->pump_r, msg->turn, msg->dirtybox, msg->flipcover, msg->airbag);
+    motor_cur_count = 0;
+  }
+#else
+  msg_append(motor_cur_logger_, "%s %d %d %d %d %d %d %d %d\n", oss.str().c_str(),
+          msg->motor_l, msg->motor_r, msg->pump_l,
+          msg->pump_r, msg->turn, msg->dirtybox, msg->flipcover, msg->airbag);
+#endif
+}
+
+void RecordMsg::WirelessChargingCallback(const hj_interface::WirelessCharging::ConstPtr& msg) {
+  ros::Time time_now = ros::Time::now();
+  std::time_t time_c = time_now.sec;
+  std::tm *ptm = std::localtime(&time_c);
+  std::ostringstream oss;
+  oss << std::put_time(ptm, "%Y-%m-%d %H:%M:%S");  // format time string
+#ifdef HJ_RELEASE_VER
+  static int wireless_charging_count = 0;
+  wireless_charging_count++;
+  if (wireless_charging_count == 3) {
+    msg_append(wireless_charging_logger_, "%s %d %d %d %d %d %d %d %d %d %d\n", oss.str().c_str(),
+          msg->bridge_circuit_vol, msg->charger_ch_vol, msg->bridge_circuit_cur,
+          msg->charger_ch_cur, msg->bridge_circuit_temp, msg->coil_temp,
+          msg->charging_cradle_vol, msg->charging_cradle_cur, msg->charging_cradle_temp, msg->charging_cradle_status);
+    wireless_charging_count = 0;
+  }
+#else
+  msg_append(wireless_charging_logger_, "%s %d %d %d %d %d %d %d %d %d %d\n", oss.str().c_str(),
+          msg->bridge_circuit_vol, msg->charger_ch_vol, msg->bridge_circuit_cur,
+          msg->charger_ch_cur, msg->bridge_circuit_temp, msg->coil_temp,
+          msg->charging_cradle_vol, msg->charging_cradle_cur, msg->charging_cradle_temp, msg->charging_cradle_status);
+#endif
 }
 
 void RecordMsg::WriteMotor(const hj_interface::Atime::ConstPtr &msg) {
@@ -322,6 +369,12 @@ void RecordMsg::PressureChatterCallback(const hj_interface::Depth::ConstPtr &msg
 
 RecordMsg::~RecordMsg() {
   CloseFiles();
+  if (motor_cur_logger_ != nullptr) {
+    hj_cst_log_del(motor_cur_logger_);
+  }
+  if (wireless_charging_logger_ != nullptr) {
+    hj_cst_log_del(wireless_charging_logger_);
+  }
 }
 
 void RecordMsg::CloseFiles() {
@@ -347,11 +400,7 @@ void RecordMsg::CloseFiles() {
 void RecordMsg::ScheduledCheckDisk() {
   std::string log_path = "";
   while (true) {
-    {
-      std::lock_guard<std::mutex> lock(mtx_);
-      log_path = cur_log_path_;
-    }
-    int32_t dir_size = static_cast<int32_t>(GetDirectorySize(log_path.data()) / 1024 / 1024);
+    int32_t dir_size = static_cast<int32_t>(GetDirectorySize(log_prefix_.data()) / 1024 / 1024);
     if (dir_size >= space_limit_) {
       space_enabled_.store(false);
       // CloseFiles();
@@ -442,45 +491,30 @@ void RecordMsg::DealTaskCallback(const hj_interface::SensorDataRecord::ConstPtr&
   switch (msg->action_cmd) {
     case 11: {
       // 开始水面任务录制
-      StartRecording(log_prefix_ + "/water_surface");
-      {
-        std::lock_guard<std::mutex> lock(mtx_);
-        cur_log_path_ = log_prefix_ + "/water_surface";
-      }
+      StartRecording(log_prefix_ + "/data/water_surface");
       HJ_INFO("Start recording water surface task.");
       break;
     }
     case 13: {
       // 开始池壁任务录制
-      StartRecording(log_prefix_ + "/pool_wall");
-      {
-        std::lock_guard<std::mutex> lock(mtx_);
-        cur_log_path_ = log_prefix_ + "/pool_wall";
-      }
+      StartRecording(log_prefix_ + "/data/pool_wall");
       HJ_INFO("Start recording pool wall task.");
       break;
     }
     case 14: {
       // 开始水线任务录制
-      StartRecording(log_prefix_ + "/water_line");
-      {
-        std::lock_guard<std::mutex> lock(mtx_);
-        cur_log_path_ = log_prefix_ + "/water_line";
-      }
+      StartRecording(log_prefix_ + "/data/water_line");
       HJ_INFO("Start recording water line task.");
       break;
     }
     case 15: {
       // 开始池底任务录制
-      StartRecording(log_prefix_ + "/pool_bottom");
-      {
-        std::lock_guard<std::mutex> lock(mtx_);
-        cur_log_path_ = log_prefix_ + "/pool_bottom";
-      }
+      StartRecording(log_prefix_ + "/data/pool_bottom");
       HJ_INFO("Start recording pool bottom task.");
       break;
     }
-    case 35: {
+    case 35:
+    case 36: {
       // 结束当前任务录制
       FinishTask();
       HJ_INFO("Stop recording current task.");
@@ -488,11 +522,7 @@ void RecordMsg::DealTaskCallback(const hj_interface::SensorDataRecord::ConstPtr&
     }
     default:
       // 开始其他任务录制
-      StartRecording(log_prefix_ + "/other_task");
-      {
-        std::lock_guard<std::mutex> lock(mtx_);
-        cur_log_path_ = log_prefix_ + "/other_task";
-      }
+      StartRecording(log_prefix_ + "/data/other_task");
       HJ_INFO("Start recording other_task.");
       break;
   }
@@ -500,20 +530,20 @@ void RecordMsg::DealTaskCallback(const hj_interface::SensorDataRecord::ConstPtr&
 
 void RecordMsg::UploadCallback(const std_msgs::Bool::ConstPtr& msg) {
   // 上传文件
-  std::string log_path = "";
-  {
-    std::lock_guard<std::mutex> lock(mtx_);
-    log_path = cur_log_path_;
-  }
-  std::string zip_file_name = log_path + "/data.zip";
-  bool ret = hj_bf::CreateZipFileByDir(zip_file_name, log_path);
-  if (ret) {
-    hj_interface::FileUpload file_upload_msg;
-    file_upload_msg.type = hj_interface::FileUpload::DEVICELOG;
-    file_upload_msg.filePath = zip_file_name;
-    file_upload_msg.deleteOnSuccess = 1;
-    pub_upload_.publish(file_upload_msg);
-  }
+  // std::string log_path = "";
+  // {
+  //   std::lock_guard<std::mutex> lock(mtx_);
+  //   log_path = cur_log_path_;
+  // }
+  // std::string zip_file_name = log_path + "/data.zip";
+  // bool ret = hj_bf::CreateZipFileByDir(zip_file_name, log_path);
+  // if (ret) {
+  //   hj_interface::FileUpload file_upload_msg;
+  //   file_upload_msg.type = hj_interface::FileUpload::DEVICELOG;
+  //   file_upload_msg.filePath = zip_file_name;
+  //   file_upload_msg.deleteOnSuccess = 1;
+  //   pub_upload_.publish(file_upload_msg);
+  // }
 }
 
 void RecordMsg::Init(uint8_t task_enable) {
@@ -523,24 +553,50 @@ void RecordMsg::Init(uint8_t task_enable) {
       HJ_ERROR("mkdir %s fail\n", log_prefix_.c_str());
       return;
     }
-  } else {
-    boost::filesystem::path path1(log_prefix_);
-    boost::filesystem::remove_all(path1);
-    int ret = mkdir(log_prefix_.c_str(), S_IRWXU);  // create folder
+  }
+  std::string data_path = log_prefix_ + "/data";
+  if (access(data_path.c_str(), 0) == -1) {  // check folder exist
+    int ret = mkdir(data_path.c_str(), S_IRWXU);  // create folder
     if (ret == -1) {
-      HJ_ERROR("mkdir %s fail\n", log_prefix_.c_str());
+      HJ_ERROR("mkdir %s fail\n", data_path.c_str());
       return;
     }
+  } else {
+#ifndef HJ_RELEASE_VER
+    boost::filesystem::path path(data_path);
+    boost::filesystem::remove_all(path);
+    int ret = mkdir(data_path.c_str(), S_IRWXU);  // create folder
+    if (ret == -1) {
+      HJ_ERROR("mkdir %s fail\n", data_path.c_str());
+      return;
+    }
+#endif
   }
 
   if (task_enable == 0) {
-    if (OpenLogFile(log_prefix_)) {
-      cur_log_path_ = log_prefix_;
-      writing_enabled_.store(true);
-    } else {
-      cur_log_path_ = log_prefix_;
-      HJ_ERROR("param.task_enable false,Open log file fail\n");
-    }
+    StartRecording(data_path);
+  } else {
+    // task sub
+    task_sub_ = hj_bf::HJSubscribe("sensor_data_record", 10, &RecordMsg::DealTaskCallback, this);
+  }
+
+  std::string motor_cur_log_path = log_prefix_ + "/motor_cur.log";
+#ifdef HJ_RELEASE_VER
+  int size = 2*1024*1024;
+#else
+  int size = 10*1024*1024;
+#endif
+  motor_cur_logger_ = hj_cst_log_add(motor_cur_log_path.data(), INFO_LOG, size, 3);
+  if (motor_cur_logger_ == nullptr) {
+    HJ_ERROR("Failed to create motor_cur logger.");
+    return;
+  }
+
+  std::string wireless_charging_log_path = log_prefix_ + "/wireless_charging.log";
+  wireless_charging_logger_ = hj_cst_log_add(wireless_charging_log_path.data(), INFO_LOG, size, 3);
+  if (wireless_charging_logger_ == nullptr) {
+    HJ_ERROR("Failed to create wireless_charging_logger_ logger.");
+    return;
   }
 
   SubTopic();

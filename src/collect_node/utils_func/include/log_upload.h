@@ -58,15 +58,16 @@ class LogUpload {
   bool Pack(enum LogUploadTypes type, std::string& pack_name);
   std::deque<hj_interface::AppData> deque_;
   std::mutex queue_mutex_;
-  std::mutex queue_cond_mutex_;
   std::condition_variable queue_cond_;
   hj_bf::HJSubscriber upload_file_cmd_sub_;
   bool exit_flag_{false};
   std::string sn_;
   std::string core_dump_dir_;
   std::string log_dir_;
+  std::string log_other_;
   std::string error_dir_;
   std::string sensor_data_;
+  std::string password_;
 };
 }  // namespace log_upload
 #endif  //  INCLUDE_LOG_UPLOAD_H_  // NOLINT

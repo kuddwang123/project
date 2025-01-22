@@ -30,6 +30,7 @@ enum function_type {
 
 enum shutdown_function_type {
   kShoutdownIotFunc = 0,
+  kShoutdownLogFunc,
   kShoutdownPostTunnelFunc,
   kShoutdownFunNum
 };

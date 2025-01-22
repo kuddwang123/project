@@ -146,7 +146,7 @@ bool PressureSensorWF::Start() {
     HJ_ERROR("can not open file %s", DEV_PATH);
     init_status_ = false;
     srv_msg_.request.code_val = WF5803_INIT_ERROR;
-    srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::FAILED;
+    srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::ERROR;
     hj_bf::HjPushSrv(srv_msg_);
   } else {
     init_status_ = true;

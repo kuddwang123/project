@@ -203,17 +203,23 @@ ssize_t mcukey_append(void* log, const char *format, ...)
     ssize_t written = 0;
     
     time_t now = time(NULL);
+    static struct tm local_time_bak = {};
     struct tm* local_time = localtime(&now);
-    struct timeval tv;
-    gettimeofday(&tv,NULL);
-    snprintf(buf, len, "[%02d-%02d %02d:%02d:%02d.%03d] %s",
-        local_time->tm_mon+1,
+    if (local_time->tm_mday != local_time_bak.tm_mday ||
+        local_time->tm_hour != local_time_bak.tm_hour ||
+        local_time->tm_min != local_time_bak.tm_min ||
+        local_time->tm_sec != local_time_bak.tm_sec) {
+      snprintf(buf, len, "[%s%02d%02d%02d%02d\n",
+        data.data(),
         local_time->tm_mday,
         local_time->tm_hour,
         local_time->tm_min,
-        local_time->tm_sec,
-        static_cast<int>(tv.tv_usec/1000),
-        data.data());
+        local_time->tm_sec
+        );
+    } else {
+      snprintf(buf, len, "[%s\n", data.data());
+    }
+    local_time_bak = *local_time;
     
     {
         std::lock_guard<std::mutex> lc(usr->_mtx);

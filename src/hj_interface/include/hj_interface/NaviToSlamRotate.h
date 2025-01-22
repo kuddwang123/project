@@ -26,12 +26,14 @@ struct NaviToSlamRotate_
   NaviToSlamRotate_()
     : timestamp()
     , navi_mode(0)
-    , rotate_state(0)  {
+    , rotate_state(0)
+    , start_edge_wise(0)  {
     }
   NaviToSlamRotate_(const ContainerAllocator& _alloc)
     : timestamp()
     , navi_mode(0)
-    , rotate_state(0)  {
+    , rotate_state(0)
+    , start_edge_wise(0)  {
   (void)_alloc;
     }
 
@@ -45,6 +47,9 @@ struct NaviToSlamRotate_
 
    typedef uint8_t _rotate_state_type;
   _rotate_state_type rotate_state;
+
+   typedef uint8_t _start_edge_wise_type;
+  _start_edge_wise_type start_edge_wise;
 
 
 
@@ -77,7 +82,8 @@ bool operator==(const ::hj_interface::NaviToSlamRotate_<ContainerAllocator1> & l
 {
   return lhs.timestamp == rhs.timestamp &&
     lhs.navi_mode == rhs.navi_mode &&
-    lhs.rotate_state == rhs.rotate_state;
+    lhs.rotate_state == rhs.rotate_state &&
+    lhs.start_edge_wise == rhs.start_edge_wise;
 }
 
 template<typename ContainerAllocator1, typename ContainerAllocator2>
@@ -134,12 +140,12 @@ struct MD5Sum< ::hj_interface::NaviToSlamRotate_<ContainerAllocator> >
 {
   static const char* value()
   {
-    return "439cad0e7c2aeed865c50a7d5d5584f1";
+    return "20ef2b1fe0b828dc77eedcd49b23c0d1";
   }
 
   static const char* value(const ::hj_interface::NaviToSlamRotate_<ContainerAllocator>&) { return value(); }
-  static const uint64_t static_value1 = 0x439cad0e7c2aeed8ULL;
-  static const uint64_t static_value2 = 0x65c50a7d5d5584f1ULL;
+  static const uint64_t static_value1 = 0x20ef2b1fe0b828dcULL;
+  static const uint64_t static_value2 = 0x77eedcd49b23c0d1ULL;
 };
 
 template<class ContainerAllocator>
@@ -159,8 +165,9 @@ struct Definition< ::hj_interface::NaviToSlamRotate_<ContainerAllocator> >
   static const char* value()
   {
     return "time timestamp\n"
-"uint8 navi_mode      #!< 机器工作模式    0:池底, 1:水面\n"
-"uint8 rotate_state   #!< 导航旋转状态    0:其他, 1:旋转开始 2:旋转结束\n"
+"uint8 navi_mode        #!< 机器工作模式    0:池底, 1:水面\n"
+"uint8 rotate_state     #!< 导航旋转状态    0:其他, 1:旋转开始 2:旋转结束\n"
+"uint8 start_edge_wise  #!< 导航是否开始沿边    1:代表开始\n"
 ;
   }
 
@@ -182,6 +189,7 @@ namespace serialization
       stream.next(m.timestamp);
       stream.next(m.navi_mode);
       stream.next(m.rotate_state);
+      stream.next(m.start_edge_wise);
     }
 
     ROS_DECLARE_ALLINONE_SERIALIZER
@@ -206,6 +214,8 @@ struct Printer< ::hj_interface::NaviToSlamRotate_<ContainerAllocator> >
     Printer<uint8_t>::stream(s, indent + "  ", v.navi_mode);
     s << indent << "rotate_state: ";
     Printer<uint8_t>::stream(s, indent + "  ", v.rotate_state);
+    s << indent << "start_edge_wise: ";
+    Printer<uint8_t>::stream(s, indent + "  ", v.start_edge_wise);
   }
 };
 

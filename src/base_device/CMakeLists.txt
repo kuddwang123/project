@@ -9,10 +9,13 @@ elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "i[3-6]86")
   set(CMAKE_EXPORT_COMPILE_COMMANDS ON) 
 endif()
 add_definitions(-DPLATFORM=${PLATFORM})
+set(RELEASE_VER "debug" CACHE STRING "debug or release")
 if(${RELEASE_VER} STREQUAL "debug")
 
 elseif(${RELEASE_VER} STREQUAL "release")
   add_definitions(-DCONFIG_ENABLE_LOG=4)
+  set(CMAKE_BUILD_TYPE "RELEASE")
+  set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 endif()
 find_package(catkin REQUIRED COMPONENTS message_generation rostime roscpp)
 

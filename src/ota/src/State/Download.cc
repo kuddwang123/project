@@ -8,7 +8,8 @@ namespace aiper_ota {
 
 CurlImpl::CurlImpl():
     isRun_(false),
-    progress_(0)
+    progress_(0),
+    dlrst_(BP_OK)
 {   
     //curlUtil_.setMaxDlSpeed(1024 * 500);
     curlUtil_.setDlProgressCb(boost::bind(&CurlImpl::dlProgress, this, boost::placeholders::_1));
@@ -22,7 +23,6 @@ CurlImpl::~CurlImpl()
 
 void CurlImpl::dlProgress(int progress)
 {
-    //fprintf(stdout, "dl progress:%d...\n", progress);
     if (mode_ == 1) {
         return;
     }
@@ -45,40 +45,52 @@ void CurlImpl::stop()
 bool CurlImpl::start(const std::string& url, const std::string& md5, const std::string& dlfile, int timeout)
 {
     if (timeout > 0) {
-        assert(curlUtil_.setTimeout(timeout));
+        if (!curlUtil_.setTimeout(timeout)) {
+            HJ_CST_TIME_ERROR(ota_logger, "set timeout fail\n");
+            return false;
+        }
     }
 
-    assert(curlUtil_.setUrl(url));
-    assert(curlUtil_.setDestFile(dlfile));
+    if (!curlUtil_.setUrl(url)) {
+        HJ_CST_TIME_ERROR(ota_logger, "set url [%s] fail\n", url.c_str());
+        return false;
+    }
 
+    if (!curlUtil_.setDestFile(dlfile)) {
+        HJ_CST_TIME_ERROR(ota_logger, "set dest file [%s] fail\n", dlfile.c_str());
+        return false;
+    }
 
+    dlrst_ = BP_OK;
     isRun_.store(true);
     bool dlrst = curlUtil_.startDownLoad();
     progress_ = 0;
     auto md5dl = utils::getFileMd5(dlfile.data());
-    //fprintf(stdout, "md5=%s, md5dl=%s, dl result:%d\n",md5.c_str(), md5dl.c_str(), dlrst);
-    /*
-    dlthread_ = std::thread th([&]() {
-        dlrst = curlUtil_.startDownLoad();
-        //cond_.notify_all();
-    });
-    
-    //cond_.wait(lc);
-    if (dlthread_.joinable()) {
-        dlthread_.join();
-        HJ_CST_TIME_DEBUG(ota_logger, "dl thread joined\n");
-    }
-    */
-    
 
     isRun_.store(false);
 
+    if (!dlrst) {
+        dlrst_ = BP_DLFAIL_NETWORK_FAIL;
+        HJ_CST_TIME_ERROR(ota_logger, "download fail\n");
+        return false;
+    }
+
+    if (md5 != utils::getFileMd5(dlfile.data())) {
+        utils::removeFile(dlfile.data());
+        HJ_CST_TIME_ERROR(ota_logger, "download md5 not match\n");
+        dlrst_ = BP_DLFAIL_MD5_MISMATCH;
+        return false;
+    }
+
+    return true;
+/*
     if (dlrst && (md5 != utils::getFileMd5(dlfile.data()))) {
         utils::removeFile(dlfile.data());
         HJ_CST_TIME_ERROR(ota_logger, "download success but md5 not match\n");
     }
 
     return dlrst && (md5 == utils::getFileMd5(dlfile.data()));
+*/
 }
 
 #if 0
@@ -107,7 +119,9 @@ Download::Download(ros::NodeHandle n, const otaStatusReportFunc& otaRptFunc):
     curlImpPtr_->setDlRptcb(otaRptFunc_);
     boost::filesystem::path dir(otaTmpDir_);
     if (!boost::filesystem::is_directory(dir)) {
-        assert(boost::filesystem::create_directories(dir));
+        if (!boost::filesystem::create_directories(dir)) {
+            HJ_CST_TIME_ERROR(ota_logger, "create dir fail\n");
+        }
     }
 }
 
@@ -120,24 +134,14 @@ void Download::stop()
 bool Download::dowork(const boost::any& para)
 {
     DlPara param = boost::any_cast<DlPara>(para);
-/*
-    if (!md5ExpOld_.empty()) {
-        if (param.md5_ != md5ExpOld_) {
-            HJ_CST_TIME_DEBUG(ota_logger, "download trigger different: [%s] [%s]\n",
-                param.md5_.c_str(), md5ExpOld_.c_str());
-            return false;
-        }
-    }
-*/
+
     mode_ = param.mode_;
     md5ExpOld_ = param.md5_;
     timeout_ = param.timeout_;
 
     curlImpPtr_->setMode(mode_);
 
-    if (mode_ == 1) {
-        //utils::touchFile(autoDlMark_);
-    } else if (mode_ == 0) {
+    if (mode_ == 0) {
         otaRptFunc_(1, 0, "", 0);
     }
 
@@ -145,17 +149,15 @@ bool Download::dowork(const boost::any& para)
     if (utils::isFileExist(dlfile.data())) {
         HJ_CST_TIME_DEBUG(ota_logger, "file [%s] exists\n", dlfile.c_str());
     } else {
-        assert(utils::emptyDir(otaTmpDir_));
+        bool ret = utils::emptyDir(otaTmpDir_);
+        assert(ret);
     }
 
     bool result = curlImpPtr_->start(param.url_, param.md5_, dlfile, timeout_);
-    
-    if (mode_ == 1) {
-        //utils::removeFile(autoDlMark_);
-    }
 
     if (result) {
-        assert(utils::renameFile(dlfile.data(), otaBinFile_));
+        bool ret = utils::renameFile(dlfile.data(), otaBinFile_);
+        assert(ret);
         HJ_CST_TIME_DEBUG(ota_logger, "rename bin file success!\n");
         if (mode_ == 0) {
             otaRptFunc_(1, 50, "", 0);
@@ -171,6 +173,11 @@ bool Download::dowork(const boost::any& para)
     
     HJ_CST_TIME_DEBUG(ota_logger, "download work end\n");
     return result;
+}
+
+int Download::getDlResult()
+{
+    return curlImpPtr_->getDlResult();
 }
 
 work_state Download::getStatus()

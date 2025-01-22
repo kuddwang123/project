@@ -108,7 +108,7 @@ void IotMqttClient::subToDownChan()
     
     AwsConnectionManager::instance()->getAwsConnection()->Subscribe(
         downChanTopic_.data(), 
-        AWS_MQTT_QOS_AT_LEAST_ONCE, 
+        AWS_MQTT_QOS_AT_MOST_ONCE, 
             Aws::Crt::Mqtt::OnMessageReceivedHandler(boost::bind(&IotMqttClient::onDownChanMessageCb, 
                             this,
                             boost::placeholders::_1,
@@ -156,7 +156,7 @@ void IotMqttClient::subToCloudDownChan()
     
     AwsConnectionManager::instance()->getAwsConnection()->Subscribe(
         downChanCloudTopic_.data(), 
-        AWS_MQTT_QOS_AT_LEAST_ONCE, 
+        AWS_MQTT_QOS_AT_MOST_ONCE, 
             Aws::Crt::Mqtt::OnMessageReceivedHandler(boost::bind(&IotMqttClient::onCloudDownChanMessageCb, 
                             this,
                             boost::placeholders::_1,

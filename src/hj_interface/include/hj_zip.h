@@ -55,7 +55,7 @@ namespace hj_bf {
    * @return true 
    * @return false 
    */
-  bool CreateZipFileByDir(const std::string& zip_file_name, const std::string& dir_path);
+  bool CreateZipFileByDir(const std::string& zip_file_name, const std::string& dir_path, const std::string& password="");
   /**
    * @brief Create a Zip File By File object
    * 
@@ -64,7 +64,7 @@ namespace hj_bf {
    * @return true 
    * @return false 
    */
-  bool CreateZipFileByFile(const std::string& zip_file_name, const std::string& file_path);
+  bool CreateZipFileByFile(const std::string& zip_file_name, const std::string& file_path, const std::string& password="");
   /**
    * @brief Create a Zip File By Files object
    * 
@@ -73,7 +73,7 @@ namespace hj_bf {
    * @return true 
    * @return false 
    */
-  bool CreateZipFileByFiles(const std::string& zip_file_name, const std::vector<std::string>& file_lists);
+  bool CreateZipFileByFiles(const std::string& zip_file_name, const std::vector<std::string>& file_lists, const std::string& password="");
 
 }  // namespace hj_bf
 

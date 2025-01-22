@@ -4,7 +4,7 @@
 // Copyright 2023 HJ Technology Co.Ltd. All rights reserved.
 // Authors: 609384347@qq.com (wangqing, 2023-12-15)
 #include "node_factory.h"
-
+//#include "guard_communication.h"
 #include <dirent.h>
 #include <sys/epoll.h>
 #include <sys/syscall.h>
@@ -22,6 +22,7 @@
 #include <rapidjson/stringbuffer.h>
 #include "node_cache.h"
 #include "log.h"
+#include "hj_utils.h"
 namespace hj_bf {
 ManagerNode* g_manager_node_ptr = nullptr;
 static std::map<int, FdCallBack> g_fd_callbacks;
@@ -188,11 +189,15 @@ void readConfigure(const std::string& config_file_name, std::shared_ptr<struct N
       document["functions"].Accept(writer);  // 将值写入缓冲区
       out_config->value_str = buffer.GetString();
     }
+    if (document.HasMember("remote_config_path") && document["remote_config_path"].IsString()) {
+      out_config->remote_config_path = document["remote_config_path"].GetString();
+    }
   } else {
     std::cerr << "cant analysis " << config_file_name << " string to json" << std::endl;
     throw std::runtime_error("cant analysis config file");
   }
 }
+
 void getConfigure(const std::string& file, const std::string& so_path) {
   FILE* fp = fopen(file.c_str(), "rb");
   if (fp == nullptr) {
@@ -588,9 +593,10 @@ struct sigaction abrt_act {};
 struct sigaction bus_act {};
 
 void handler(int signo) {
-  std::cerr << "CALLBACK: SIGNAL:" << signo << std::endl;
+  std::cerr << RECORD_TIMESTAMP << "CALLBACK: SIGNAL:" << signo << std::endl;
   if (g_params.find(signo) != g_params.end()) {
-    std::cerr << boost::stacktrace::stacktrace() << std::endl;
+    //    guard_communication::sendCrashMessageToGuard();
+    std::cerr << RECORD_TIMESTAMP << boost::stacktrace::stacktrace() << std::endl;
   }
   if (signo == SIGSEGV && sigaction(signo, &segv_act, nullptr) == -1) {
     std::cerr << "sigaction SIGSEGV error:" << std::endl;

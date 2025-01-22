@@ -6,7 +6,10 @@
 #define  BOOTING_RESULT_NOTIFY                  "/booting_result_sub"
 #define  UPLOAD_IOT                             "/upload_iot"
 #define  STATE_DEAL                             "/state_deal"
+#define  AFFECTED_TASK_AREA                     "/affected_task_area"
 #define  APP_ONLINE                             "/AppOnline"
+/**************************state_machine*******************************/
+#define  MACHINE_STATE_TOPIC                    "/machine_state"
 
 /**************************task_manager********************************/
 #define  SIGNAL_TASK                            "/signal_task_sub"
@@ -26,6 +29,12 @@
 #define  TOPIC_PUMP_CONTROL                     "/control/pumpTurnOn"
 #define  LED_BY_TASK_TOPIC                      "/led_by_task"
 #define  ERROR_CODE_STATISTICS                  "/error_code_statistics"
+#define  TOPIC_TO_NAVI_SLAM                     "/to_navi_slam"
+#define  TOPIC_FROM_NAVI_SLAM                   "/from_navi_slam"
+#define  TOPIC_TO_RELOAD_MEM_TASK               "/to_reload_mem_task"
+#define  TOPIC_ANGO_ENABLE                      "/ango_enable"
+#define  TOPIC_KBD_CONTROL                      "/kbd_control"
+#define  TOPIC_RUN_DEMO                         "/runDemo"
 /**************************parse_command*******************************/
 #define  PARSE_COMMAND                          "/parse_command_sub"
 #define  LORA_REMOTE_CONTROL                    "/lora_remotectl"
@@ -44,11 +53,16 @@
 #define  IOT_DELETE_SHADOW_SERVICE              "/IotDeleteShadow"
 #define  TOPIC_SET_LED_AFFECT                   "/set_led_affect"
 #define  TOPIC_DEV_INFO                         "/devInfoReport"
-#define TOPIC_WATER_STATE                       "/water_inspection"
+#define  TOPIC_WATER_STATE                       "/water_inspection"
+#define  TOPIC_PARSE_TO_TASK_MANAGER             "/parse_to_task_manager"
+#define  TOPIC_ANGO_ENABLE_FROM_MCU             "/ango_enable_from_mcu"
 constexpr const char* kSysActionReq = "/sys_action_req";
 constexpr const char* kSysActionResp = "/sys_action_resp";
 constexpr const char* kFacActionReq = "/factory/action_req";
 constexpr const char* kFacActionResp = "/factory/action_resp";
+constexpr const char* kOtaEnterReq = "/OtaEnterReq";
+constexpr const char* kOtaEnterResp = "/OtaEnterResp";
+constexpr const char* kOtaQuitTopic = "/OtaQuit";
 /******************************OTA************************************/
 #define TOPIC_OTA_SEND_BIN_INFO                 "/system/sendBinInfo"
 #define TOPIC_OTA_RECV_BIN_LOCATION             "/system/recvBinLocation"  
@@ -62,16 +76,18 @@ constexpr const char* kFacActionResp = "/factory/action_resp";
 #define BAT_CHATTER                                   "bat_chatter"
 #define TOPIC_DEPTH_CHATTER                           "depth_chatter"
 #define TOPIC_MOTOR_CUR                               "/motor_cur"
+#define TOPIC_CURRENT_RESULT                          "/current_result"
 #define TOPIC_TURBIDITY_DATA                          "turbidity_data"
 #define TOPIC_MOTOR_CHATTER                           "motor_chatter"
 #define TOPIC_PUMP_MOTOR_SPEED_CHATTER                "/pumpMotorSpeed_chatter"
+#define TOPIC_PUMP_STEER                              "/pump_steer"
 #define TOPIC_IMU_CHATTER "imu_chatter"
 #define TOPIC_MACHINE_ON_TIMES "/machine_on/times"
 #define TOPIC_CLEAN_MODE  "/clean_mode"
 #define TOPIC_MIDDLEWARE_TASK                       "/middleware_task"
 #define TOPIC_OUT_WATER_HALL                        "/outwater_hall"
 /******************************Alarm************************************/
-#define TOPIC_HEALTH_MONITOR "/hj_health_monitor"
+#define SERVICE_HEALTH_MONITOR "/hj_health_monitor"
 /******************************Other************************************/
 #define SRV_AIR_BAG_CONTROL "/airBag/control"
 #define TOPIC_AIR_BAG_CONTROL "/air_bag"

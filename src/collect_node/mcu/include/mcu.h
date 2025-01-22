@@ -33,8 +33,6 @@
 #include "hj_interface/SysAction.h"
 #ifdef HJ_T1pro
 #include "hj_interface/McuSensorStatusT1.h"
-#include "hj_interface/LeftTof.h"
-#include "hj_interface/Turbidity.h"
 #include "hj_interface/DustPlugDetection.h"
 #else
 #include "hj_interface/DownLeft.h"
@@ -68,6 +66,7 @@
 #define IMU_MSG_ID 0x13
 #define IMU_CALI_ID 0x14
 #define IMU_CALI_ACK 0x15
+#define IMU_RESET_ACK 0x17
 #define BAT_MSG_ID 0x20
 #define DOWNWARD_SENSOR_ID 0x21
 #define OUTWATER_DETEC_ID 0x22
@@ -86,6 +85,7 @@
 #define TURBIN_CTL_ACK 0x37
 #define AIRBAG_STATUS_MSG 0x3a
 #define AIRBAG_STATUS2_MSG 0x3b
+#define CHARGE_CTL_ACK 0x5B
 #define LIGHT_STRIP_ACK 0x93
 #define LIGHT_PEARL_ACK 0x95
 #define MODULE_REBOOT_ACK 0x97
@@ -116,6 +116,7 @@
 #define ANGO_MSG_ID 0x8C
 #define BOOT_TYPE_RES 0x55
 #define LOWPOWER_CTL_ACK 0x53
+#define ANGO_ENABLE_ID 0x88
 #define FACTORYMODULEACK 0x101
 #define FACTORYAIRBAGCTRLACK 0x103
 #ifdef HJ_T1pro
@@ -201,6 +202,7 @@ typedef struct {
   int16_t charger_ch_cur;
   uint16_t cycle_times;
   uint8_t health_left;
+  uint8_t charge_ctl;
 } __attribute__((packed)) BAT_msg;
 
 typedef struct {
@@ -247,11 +249,17 @@ typedef struct {
 } __attribute__((packed)) Temp_Humidity;
 
 typedef struct {
-  u_int32_t id; 
-  u_int16_t  ver_1;
-  u_int16_t  ver_2;
-  u_int16_t  ver_3;
-  u_int8_t   hw_ver;
+  uint16_t  ver_1;
+  uint16_t  ver_2;
+  uint16_t  ver_3;
+  uint8_t   hw_ver;
+} __attribute__((packed)) Mcu_Ver;
+
+typedef struct {
+  uint32_t id;
+  Mcu_Ver base;
+  Mcu_Ver led;
+  Mcu_Ver ango;
 } __attribute__((packed)) Mcu_Ver_msg;
 
 typedef struct {
@@ -521,9 +529,7 @@ class McuImpl {
     bool modulePowerManage(bool is_power_on);
     void setStandbyMode(uint8_t mode) { standby_mode_ = mode; }
 #ifdef HJ_T1pro
-    void TofPub(const hj_interface::LeftTof&);
     void InfraredSensorPub(const hj_interface::DownRay&);
-    void TurbidityPub(const hj_interface::Turbidity&);
     void DustPlugPub(const hj_interface::DustPlugDetection&);
     void pubMcuSensorStatus(const McuSensorStatus_msg* msg);
 #else
@@ -564,6 +570,7 @@ class McuImpl {
     void pubTmtCltToMid(uint32_t);
     void pubDirtBoxToMid(uint8_t);
     void pubAngoReqToMid(uint32_t, uint32_t);
+    void pubAngoEnableToMid(uint8_t);
     void pubPumpMotorSpeed(uint16_t, uint16_t);
     void pubFanMotorSpeed(uint16_t);
     void pubTimeDiff(double);
@@ -607,14 +614,12 @@ class McuImpl {
     hj_bf::HJPublisher to_middleware_pub_;
     hj_bf::HJPublisher tempHumidity_pub_;
     hj_bf::HJPublisher sensorTemp_pub_;
-    hj_bf::HJPublisher bootType_pub_;
+    // hj_bf::HJPublisher bootType_pub_;
     hj_bf::HJPublisher turn_motor_hall_pub_;
     hj_bf::HJPublisher wireless_charging_pub_;
     hj_bf::HJPublisher mcu_sensor_status_pub_;
 #if HJ_T1pro
     hj_bf::HJPublisher infrared_sensor_pub_;
-    hj_bf::HJPublisher tof_pub_;
-    hj_bf::HJPublisher turbidity_pub_;
     hj_bf::HJPublisher dust_plug_pub_;
 #else
     hj_bf::HJPublisher infrared_sensor_pub_;
@@ -631,8 +636,9 @@ class McuImpl {
     hj_bf::HJPublisher airbag_status2_pub_;
     hj_bf::HJPublisher impeller_speed_pub_;
     hj_bf::HJPublisher flipcover_ack_pub_;
-
     hj_bf::HJPublisher pub_func_response_;
+    hj_bf::HJPublisher pub_engo_enable_;
+
     hj_bf::HJSubscriber sub_motor_set_;
     hj_bf::HJSubscriber sub_airbag_;
     hj_bf::HJSubscriber sub_steerpump_;
@@ -655,7 +661,6 @@ class McuImpl {
   #endif
     hj_bf::HJTimer heartBeat_;
     hj_bf::HJTimer getMcuVerTmr_;
-    hj_bf::HJTimer getmcuLedVer_;
     hj_bf::HJTimer rtcSyncTmr_;
     hj_bf::HJTimer syncRtcWithFlagTmr_;
     hj_bf::HJTimer closePipeTmr_;
@@ -683,16 +688,14 @@ class McuImpl {
     SensorCtl factoryModuleCtrl_;
     SensorCtl factoryAirbagCtrl_;
     SensorCtl keyBlockCtl_;
+    SensorCtl imuResetCtl_;
+    SensorCtl chargeCtl_;
 
   private:
     void motor_set_chatterCallback(const hj_interface::Nav::ConstPtr&);
     void mcuCtlCallBack(const std_msgs::Bool::ConstPtr&);
-    // void speedTimerCb(const hj_bf::HJTimerEvent&);
-    // void imuCaliEnableTimerCb(const hj_bf::HJTimerEvent&);
-    // void imuCaliDisableTimerCb(const hj_bf::HJTimerEvent&);
     void heartBeatTimerCb(const hj_bf::HJTimerEvent&);
     void getMcuVerTimerCb(const hj_bf::HJTimerEvent&);
-    void getMcuLedVerTimerCb(const hj_bf::HJTimerEvent&);
     void rtcTimeSyncTimerCb(const hj_bf::HJTimerEvent&);
     void getRtcTimerCb(const hj_bf::HJTimerEvent&);
     void syncRtcWithFlag(const hj_bf::HJTimerEvent&);
@@ -732,6 +735,7 @@ class McuImpl {
     void dealAngoJsonFromMid(const rapidjson::Value&);
     void dealLowPowerFromMid(const rapidjson::Value&);
     void dealBlockKeyFronMid(const rapidjson::Value&);
+    void dealChargeCtlFromMid(const rapidjson::Value&);
 
   private:
     enum {

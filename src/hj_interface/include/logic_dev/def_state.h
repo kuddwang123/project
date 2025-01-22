@@ -9,7 +9,33 @@
 #include <unordered_map>
 #include <tuple>
 #include <time.h>
+#include <ctime>
 #include "logic_dev/machine_state.h"
+#include "logic_dev/public_macro.h"
+
+// 线速度结构体定义
+struct AllSpeed {
+  float line_speed_ {0.0};  //当前线速度
+  int32_t angular_speed_ {45};  //当前角速度
+  struct PumpSpeed {
+    int32_t type_ {1};  //水泵当前模式 1-转速 2-占空比 3-功率(W)
+    int min_ {800};  //最小值
+    int max_ {1600};  //最大值
+  } pump_speed_;  //泵速设置
+};
+
+// 脚本运行模式
+enum class ScriptRunMode { 
+  IDLE             = 0,  // 空闲
+  STOP_RUN         = 222,
+  FREQ_DEMO        = 201,  // 变频演示
+  GO_BACK_DEMO     = 202,  // 直线演示
+  VECTOR_PUMP_DEMO = 203,  // 矢量泵演示
+  HIGH_LAND_DEMO   = 211,  // 防跌落演示
+  WATER_LINE_DEMO  = 212,  // 水线演示
+  UP_DOWN_DEMO     = 213  // 上下演示
+
+};
 
 //遥控器按键定义
 enum class PhyCtlKey {
@@ -64,7 +90,8 @@ enum class CleanMode {
 enum class AreaType {
   NROMAL = 0,   //普通模式
   SMART = 1,     //智能模式 11+12+13
-  UNDER_WATER = 2  //水下模式 12+13
+  UNDER_WATER = 2,  //水下模式 12+13
+  SUPER_ECO = 3  //超低功耗模式 
 };
 
 enum class CleanArea {
@@ -79,12 +106,25 @@ enum class CleanArea {
 
 };
 
+enum class AffectedTaskArea {  
+  IDLE          = 0, 
+  SURFACE       = 11,  
+  POOL_BOTTOM   = 12,  
+  POOL_WALL     = 13,  
+  WATER_LINE    = 14
+#ifdef FOR_MULTI_PLATFORM_CLEAN  
+  ,MULTI_BOTTOM = 15  //多平台清洁
+#endif
+};
+
 enum class BottomRunMode {
   CROSS_BOW = 1,        //十字弓
-  ADAPTIVE_BOW  = 2     //自适应弓
+  ADAPTIVE_BOW  = 2,     //自适应弓
+  RANDOM_RUN    = 3     //随机运行
 };
 
 static std::unordered_map<CleanArea, std::string> clean_area_map = {
+  {CleanArea::IDEL, "Idle"},
   {CleanArea::AREA1, "Water Surface"},
   {CleanArea::AREA2, "Pool Bottom"},
   {CleanArea::AREA3, "Pool Wall"},
@@ -203,6 +243,7 @@ enum class ToSlamOrNaviReq {
   SLAM_STATE       = 31,     //SLAM状态请求 
   NAVI_STATE       = 32,     //NAVI状态请求
   GET_CLEAN_RECORD = 35,     //获取清洁记录信息
+  GET_CLEAN_RECORD_FAILED = 36, //获取清洁失败记录
   STOP_BUILD_MAP   = 103,    //停止建图
   STOP_LOCALIZE    = 104,    //停止定位
   PAUSE_CLEANING   = 111,    //暂停清扫
@@ -272,6 +313,13 @@ enum class SlamOrNaviRespResult {
   NAVI_MOORING_FAIL        = 44,     //NAVI停泊失败 -- 后期定义失败的具体错误码
   NAVI_BACK_CHARGE_SUCCESS = 51,     //NAVI回充成功
   NAVI_BACK_CHARGE_FAIL    = 52      //NAVI回充失败 -- 后期定义失败的具体错误码
+};
+
+enum class AngoTaskType {
+  STOP = 0,
+  SLEEP = 6,
+  MOORING = 10,
+  CALLBACK = 11
 };
 
 #endif // DEF_STATE

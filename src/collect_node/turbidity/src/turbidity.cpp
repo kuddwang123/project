@@ -27,28 +27,10 @@ void Turbidimeter::TurbidimeterTimer(const hj_bf::HJTimerEvent &) {
   int ret = write(uart_.GetFd(), s_send_tur_data, 5);
   if (ret > 0) {
     ret = read(uart_.GetFd(), s_read_buf, 5);
-    if (0 == (ret % 5) && 0x18 == s_read_buf[0] && 0x0d == s_read_buf[4]) {
+    if (ret > 0 && 0 == (ret % 5) && 0x18 == s_read_buf[0] && 0x0d == s_read_buf[4]) {
       turbidity = s_read_buf[3];
       tur_msg_.timestamp = ros::Time::now();
       tur_msg_.turbidity = turbidity;
-      bool charge_status = charge_status_.load();
-      if (!charge_status &&turbidity >= THRESHOLD_VALUE) {  // 脏污值大于243，认为超过阈值
-        greater_threshold_count_ = (greater_threshold_count_ > THRESHOLD_COUNT ?
-                                    THRESHOLD_COUNT + 1 : greater_threshold_count_ + 1);
-      } else {
-        greater_threshold_count_ = 0;
-      }
-      if (threshold_status_ && greater_threshold_count_ >= THRESHOLD_COUNT) {
-        srv_msg_.request.code_val = TUR_DATA_OVERFLOW_ERROR;
-        srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::ERROR;
-        hj_bf::HjPushSrv(srv_msg_);
-        threshold_status_ = false;
-      } else if (!threshold_status_ && greater_threshold_count_ == 0) {
-        srv_msg_.request.code_val = TUR_DATA_OVERFLOW_ERROR;
-        srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::NORMAL;
-        hj_bf::HjPushSrv(srv_msg_);
-        threshold_status_ = true;
-      }
       if (!status_) {
         srv_msg_.request.code_val = TUR_DATA_ERROR;
         srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::NORMAL;
@@ -58,9 +40,12 @@ void Turbidimeter::TurbidimeterTimer(const hj_bf::HJTimerEvent &) {
       error_count_ = 0;
       chatter_pub_.publish(tur_msg_);
     } else {
+      tur_msg_.timestamp = ros::Time::now();
+      tur_msg_.turbidity = 255;
+      chatter_pub_.publish(tur_msg_);
       if (status_ && error_count_ >= ERROR_COUNT) {
         srv_msg_.request.code_val = TUR_DATA_ERROR;
-        srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::ERROR;
+        srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::WARNING;
         hj_bf::HjPushSrv(srv_msg_);
         status_ = false;
         HJ_ERROR("turbidimeter_timer read frame format error.ret=%d, data=%x,%x,%x,%x,%x",
@@ -69,9 +54,12 @@ void Turbidimeter::TurbidimeterTimer(const hj_bf::HJTimerEvent &) {
       error_count_++;
     }
   } else {
+    tur_msg_.timestamp = ros::Time::now();
+    tur_msg_.turbidity = 255;
+    chatter_pub_.publish(tur_msg_);
     if (status_ && error_count_ >= ERROR_COUNT) {
       srv_msg_.request.code_val = TUR_DATA_ERROR;
-      srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::ERROR;
+      srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::WARNING;
       hj_bf::HjPushSrv(srv_msg_);
       status_ = false;
       HJ_ERROR("write to  fd_turbid_ error.fd=%d", uart_.GetFd());
@@ -91,14 +79,6 @@ void Turbidimeter::RestartCallback(const std_msgs::Bool::ConstPtr& msg) {
   }
 }
 
-void Turbidimeter::BatCallback(const hj_interface::Bat::ConstPtr& msg) {
-  if (msg->ch_vol > 15000 && msg->charger_ch_cur > 50) {
-    charge_status_.store(true);
-  } else {
-    charge_status_.store(false);
-  }
-}
-
 bool Turbidimeter::Start() {
   bool ret = uart_.Initialize(9600, 0, 8, 1, 'N');
   ret &=uart_.LibttyRs485Set(false);
@@ -106,7 +86,7 @@ bool Turbidimeter::Start() {
     HJ_ERROR("turbidity ret init = %d", ret);
     init_status_ = false;
     srv_msg_.request.code_val = TUR_INIT_ERROR;
-    srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::FAILED;
+    srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::WARNING;
     hj_bf::HjPushSrv(srv_msg_);
   } else {
     init_status_ = true;
@@ -131,7 +111,6 @@ Turbidimeter::Turbidimeter(const rapidjson::Value &json_conf) : hj_bf::Function(
   // your  code
   chatter_pub_ = hj_bf::HJAdvertise<hj_interface::Turbidity>("turbidity_data", 10);
   restart_sub_ = hj_bf::HJSubscribe("/xxx", 1, &Turbidimeter::RestartCallback, this);
-  bat_sub_ = hj_bf::HJSubscribe("/bat_chatter", 1, &Turbidimeter::BatCallback, this);
 
   if (Start()) {
     HJ_INFO("turbidity init success");

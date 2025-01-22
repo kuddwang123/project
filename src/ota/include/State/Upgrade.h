@@ -25,6 +25,8 @@ public:
     bool dowork(const boost::any& para) override;
     OtaModule getFailModule() const {return failModule_;}
     bool doUpgradeBack(OtaModule module);
+    std::string getFailMsg() const {return failMsg_;}
+    int getAngoOta() const {return angoOta_;};
 
 private:
     bool upgradeAngo(const std::string& bin, const std::string& ver);
@@ -45,6 +47,8 @@ private:
     nlohmann::json cutRstJson_;
     nlohmann::json mcuVerJson_;
     OtaModule failModule_;
+    std::string failMsg_;
+    int angoOta_;
     std::condition_variable cond_;
     std::mutex mtx_;
 };

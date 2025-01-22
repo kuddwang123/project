@@ -5,6 +5,7 @@
   "node_log_close":false,
   "node_name":"slam_node",
   "node_threads":4,
+  "remote_config_path":"/userdata/hj/config",
   "functions": [
     {
       "ID": "core_dump",

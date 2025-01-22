@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <chrono>
@@ -24,14 +25,19 @@
 #include "log.h"
 #include "big_data.h"
 #include "rapidjson/document.h"
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
 #include "status_code.h"
-#include "hj_interface/HealthCheckCode.h"
 #include "node_cache.h"
+#include "shm_interface.h"
 #include "boost/filesystem.hpp"
-
+#include "hj_interface/HealthCheckCode.h"
+#include "hj_interface/BootType.h"
 
 namespace collect_node_utils_func {
 constexpr char kNodeMonitorJson[] = "/userdata/hj/log/node_monitor.json";
+constexpr char kTaskName[] = "/userdata/hj/log/.task_name";
+
 std::unordered_map<std::string, std::string> kNodeInfoMap = {
   {"collect_node", "collectNode"},
   {"middleware_node", "middlewareNode"},
@@ -191,25 +197,41 @@ int32_t Monitor::GetProcessPidByName(const std::string& proc_name) {
     if (fgets(buf, 50, fp) != nullptr) {
       pid = atoi(buf);
     }
+    pclose(fp);
+  } else {
+    HJ_ERROR("popen failed");
   }
 
-  pclose(fp);
   return pid;
 }
-
-
 
 Monitor::~Monitor() {
 }
 
-void Monitor::TaskCallBack(const std_msgs::UInt8::ConstPtr& msg) {
-  task_.store(msg->data);
-  HJ_INFO("task_ is %d", msg->data);
+// void Monitor::TaskCallBack(const std_msgs::UInt8::ConstPtr& msg) {
+//   // task_.store(msg->data);
+//   HJ_INFO("task_ is %d", msg->data);
+// }
+
+void Monitor::TaskNameCallBack(const std_msgs::String::ConstPtr& msg) {
+  std::lock_guard<std::mutex> lock(mtx_);
+  if (msg->data == "finish") {
+    task_name_ = "";
+  } else {
+    task_name_ = msg->data;
+  }
+  std::ofstream file_writer(kTaskName);
+  if (file_writer) {
+    file_writer << task_name_;
+    file_writer.close();
+  }
+  
+  HJ_INFO("task name: %s", task_name_.data());
 }
 
 void Monitor::CalCpuMemeory() {
   int32_t total_memery = GetAllMemory();
-  uint8_t old_task = 0;
+  // uint8_t old_task = 0;
   uint64_t collect_node_cpu = 0, collect_node_memory = 0;
   uint64_t slam_node_cpu = 0, slam_node_memory = 0;
   uint64_t planning_node_cpu = 0, planning_node_memory = 0;
@@ -217,68 +239,62 @@ void Monitor::CalCpuMemeory() {
   uint64_t utils_node_cpu = 0, utils_node_memory = 0;
   int count = 0;
   bool is_start = false;  // task start flag
-  std::ifstream stream1("/etc/version");  // 输入流
-  if (!stream1.is_open()) {
-    HJ_ERROR("open file failed");
-  }
-  rapidjson::Document document;
-  std::string jsonString((std::istreambuf_iterator<char>(stream1)),
-                  std::istreambuf_iterator<char>());
-
-  if (!document.Parse(jsonString.data()).HasParseError()) {
-    if (document.HasMember("fw_ver") && document["fw_ver"].IsString()) {
-      fw_version_ = document["fw_ver"].GetString();
-    }
-  }
+  std::string task_name = "";
+  std::string associated_task = "";
 
   while (true) {
-    old_task = task_.load();
-
-    if ((old_task == TASK_BUILD_MAP_FINISH || old_task == TASK_RELOCATE_FINISH ||
-        old_task == TASK_CLEAN_FINISH) && is_start && count > 0) {
+    // old_task = task_.load();
+    {
+      std::lock_guard<std::mutex> lock(mtx_);
+      task_name = task_name_;  // associatedTaskId
+      if (!task_name.empty()) {
+        associated_task = task_name_;
+      }
+    }
+    if (task_name.empty() && is_start && count > 0) {
       ros::Time timestamp = ros::Time::now();
       double time_now = timestamp.toSec();
       int64_t timestamp_ms = static_cast<int64_t>(time_now * 1000);
       std::string collect_node_cpu_avg = std::to_string(1.0 * collect_node_cpu / count);
       std::string collect_node_mem_avg = std::to_string(100.0 * collect_node_memory / count / total_memery);
-      std::string str = R"({"event": "nodeOccupancyEvent", "node": "collectNode", "cpuOcc": )" +
+      std::string str = R"({"event": "nodeOccupancyEvent", "associatedTaskId": ")" + associated_task + R"(", "node": "collectNode", "cpuOcc": )" +
                       collect_node_cpu_avg.substr(0, collect_node_cpu_avg.find('.') + 2) +
                       R"(, "memOcc": )" + collect_node_mem_avg.substr(0, collect_node_mem_avg.find('.') + 2) +
                       R"(, "time": )" +  std::to_string(timestamp_ms) +  R"(, "fwVersion": ")" + fw_version_ + R"("})";
       big_data::InsertBigdata(str);
-      // HJ_INFO("big_data: %s\n", str.c_str());
+      HJ_INFO("big_data: %s\n", str.c_str());
       std::string slam_node_cpu_avg = std::to_string(1.0 * slam_node_cpu / count);
       std::string slam_node_mem_avg = std::to_string(100.0 * slam_node_memory / count / total_memery);
-      str = R"({"event": "nodeOccupancyEvent", "node": "slamNode", "cpuOcc": )" +
+      str = R"({"event": "nodeOccupancyEvent", "associatedTaskId": ")" + associated_task + R"(", "node": "slamNode", "cpuOcc": )" +
             slam_node_cpu_avg.substr(0, slam_node_cpu_avg.find('.') + 2) +
             R"(, "memOcc": )" + slam_node_mem_avg.substr(0, slam_node_mem_avg.find('.') + 2) +
             R"(, "time": )" +  std::to_string(timestamp_ms) +  R"(, "fwVersion": ")" + fw_version_ + R"("})";
       big_data::InsertBigdata(str);
-      // HJ_INFO("big_data: %s\n", str.c_str());
+      HJ_INFO("big_data: %s\n", str.c_str());
       std::string planning_node_cpu_avg = std::to_string(1.0 * planning_node_cpu / count);
       std::string planning_node_mem_avg = std::to_string(100.0 * planning_node_memory / count / total_memery);
-      str = R"({"event": "nodeOccupancyEvent", "node": "planningNode", "cpuOcc": )" +
+      str = R"({"event": "nodeOccupancyEvent", "associatedTaskId": ")" + associated_task + R"(", "node": "planningNode", "cpuOcc": )" +
             planning_node_cpu_avg.substr(0, planning_node_cpu_avg.find('.') + 2) +
             R"(, "memOcc": )" + planning_node_mem_avg.substr(0, planning_node_mem_avg.find('.') + 2) +
             R"(, "time": )" +  std::to_string(timestamp_ms) +  R"(, "fwVersion": ")" + fw_version_ + R"("})";
       big_data::InsertBigdata(str);
-      // HJ_INFO("big_data: %s\n", str.c_str());
+      HJ_INFO("big_data: %s\n", str.c_str());
       std::string middleware_node_cpu_avg = std::to_string(1.0 * middleware_node_cpu / count);
       std::string middleware_node_mem_avg = std::to_string(100.0 * middleware_node_memory / count / total_memery);
-      str = R"({"event": "nodeOccupancyEvent", "node": "middlewareNode", "cpuOcc": )" +
+      str = R"({"event": "nodeOccupancyEvent", "associatedTaskId": ")" + associated_task + R"(", "node": "middlewareNode", "cpuOcc": )" +
             middleware_node_cpu_avg.substr(0, middleware_node_cpu_avg.find('.') + 2) +
             R"(, "memOcc": )" + middleware_node_mem_avg.substr(0, middleware_node_mem_avg.find('.') + 2) +
             R"(, "time": )" +  std::to_string(timestamp_ms) +  R"(, "fwVersion": ")" + fw_version_ + R"("})";
       big_data::InsertBigdata(str);
-      // HJ_INFO("big_data: %s\n", str.c_str());
+      HJ_INFO("big_data: %s\n", str.c_str());
       std::string utils_node_cpu_avg = std::to_string(1.0 * utils_node_cpu / count);
       std::string utils_node_mem_avg = std::to_string(100.0 * utils_node_memory / count / total_memery);
-      str = R"({"event": "nodeOccupancyEvent", "node": "utilsNode", "cpuOcc": )" +
+      str = R"({"event": "nodeOccupancyEvent", "associatedTaskId": ")" + associated_task + R"(", "node": "utilsNode", "cpuOcc": )" +
             utils_node_cpu_avg.substr(0, utils_node_cpu_avg.find('.') + 2) +
             R"(, "memOcc": )" + utils_node_mem_avg.substr(0, utils_node_mem_avg.find('.') + 2) +
             R"(, "time": )" +  std::to_string(timestamp_ms) +  R"(, "fwVersion": ")" + fw_version_ + R"("})";
       big_data::InsertBigdata(str);
-      // HJ_INFO("big_data: %s\n", str.c_str());
+      HJ_INFO("big_data: %s\n", str.c_str());
 
       count = 0;
       is_start = false;
@@ -292,8 +308,7 @@ void Monitor::CalCpuMemeory() {
       middleware_node_memory = 0;
       utils_node_cpu = 0;
       utils_node_memory = 0;
-    } else if (old_task == TASK_BUILD_MAP_START ||
-          old_task == TASK_RELOCATE_START ||old_task == TASK_CLEAN_START) {
+    } else if (!task_name.empty()) {
       collect_node_pid_ = GetProcessPidByName("collect_node");
       slam_node_pid_ = GetProcessPidByName("slam_node");
       planning_node_pid_ = GetProcessPidByName("planning_node");
@@ -316,16 +331,67 @@ void Monitor::CalCpuMemeory() {
   }
 }
 
-void Monitor::UploadCoredump(const hj_bf::HJTimerEvent &event) {
+void Monitor::pubBootType(bool is_core_dump) {
+  hj_interface::BootType bootmsg;
+  if (is_core_dump) {
+    bootmsg.type = 6;  // 6: coredump reboot
+    bootType_pub_.publish(bootmsg);
+    HJ_INFO("pubBootType: coredump reboot");
+  } else {
+    uint8_t boot_type = 255;
+    uint8_t ango_flag = 255;
+    uint8_t ango_data = 255;
+    bool ret = hj_bf::getVariable("bootType", boot_type);
+    while (!ret) {
+      ret = hj_bf::getVariable("bootType", boot_type);
+      if (!ret) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+      }
+    }
+    ret = hj_bf::getVariable("angoflag", ango_flag);
+    while (!ret) {
+      ret = hj_bf::getVariable("angoflag", ango_flag);
+      if (!ret) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+      }
+    }
+    ret = hj_bf::getVariable("angodata", ango_data);
+    while (!ret) {
+      ret = hj_bf::getVariable("angodata", ango_data);
+      if (!ret) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+      }
+    }
+    bootmsg.type = boot_type;
+    if (ango_flag != 255 && ango_data != 255) {
+      rapidjson::Document document;
+      document.SetObject();
+
+      rapidjson::Value angoReq(rapidjson::kObjectType);
+      angoReq.AddMember("type", ango_flag, document.GetAllocator());
+      angoReq.AddMember("data", ango_data, document.GetAllocator());
+      document.AddMember("anGeReq", angoReq, document.GetAllocator());
+      rapidjson::StringBuffer buffer;
+      rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+      document.Accept(writer);
+      bootmsg.ango = std::string(buffer.GetString());
+    }
+
+    bootType_pub_.publish(bootmsg);
+    HJ_INFO("pubBootType: %d, msg:%s", boot_type, bootmsg.ango.data());
+  }
+}
+
+void Monitor::UploadCoredump() {
   boost::filesystem::path json_path(kNodeMonitorJson);
   if (!boost::filesystem::exists(json_path)) {
-    coredump_upload_timer_.stop();
+    pubBootType(false);
     return;
   }
   std::ifstream stream1(kNodeMonitorJson);  // 输入流
   if (!stream1.is_open()) {
     HJ_ERROR("open file failed %s", kNodeMonitorJson);
-    coredump_upload_timer_.stop();
+    pubBootType(false);
     return;
   }
   std::vector<std::string> dump_node_list;
@@ -348,24 +414,52 @@ void Monitor::UploadCoredump(const hj_bf::HJTimerEvent &event) {
       if (document.HasMember("node") && document["node"].IsString()) {
         node_name = document["node"].GetString();
       }
-      if (document.HasMember("timestamp") && document["timestamp"].IsFloat()) {
-        float timestamp_ms = document["timestamp"].GetFloat();
+      if (document.HasMember("timestamp") && document["timestamp"].IsDouble()) {
+        double timestamp_ms = document["timestamp"].GetDouble();
         time_ms = static_cast<uint64_t>(timestamp_ms * 1000);
       }
-      std::string str = R"({"event": "nodeCorruptionEvent", "node": )" + kNodeInfoMap[node_name] +
-            R"(, "time": )" +  std::to_string(time_ms) +  R"(, "fwVersion": ")" + fw_version_ + R"("})";
-      // HJ_INFO("UploadCoredump big_data: %s\n", str.c_str());
+      std::string task_name = "";
+      std::ifstream file_read(kTaskName);
+      if (file_read) {
+        std::ostringstream ss;
+        ss << file_read.rdbuf();  // 读取整个文件内容到字符串流
+        task_name = ss.str();
+        file_read.close();
+      }
+      std::string str = R"({"event": "nodeCorruptionEvent", "associatedTaskId": ")" + task_name + R"(", "node": ")" + kNodeInfoMap[node_name] +
+            R"(", "time": )" +  std::to_string(time_ms) +  R"(, "fwVersion": ")" + fw_version_ + R"("})";
+      HJ_INFO("UploadCoredump big_data: %s\n", str.c_str());
       big_data::InsertBigdata(str);
+      std::ofstream file_writer(kTaskName, std::ios_base::out);
     }
   }
-  coredump_upload_timer_.stop();
+  if (dump_node_list.empty()) {
+    pubBootType(false);
+  } else {
+    pubBootType(true);
+  }
 }
 
 void Monitor::Init() {
-  task_sub_ = hj_bf::HJSubscribe("/middleware_task", 1, &Monitor::TaskCallBack, this);
+  std::ifstream stream1("/etc/version");  // 输入流
+  if (!stream1.is_open()) {
+    HJ_ERROR("open file failed");
+  }
+  rapidjson::Document document;
+  std::string jsonString((std::istreambuf_iterator<char>(stream1)),
+                  std::istreambuf_iterator<char>());
+
+  if (!document.Parse(jsonString.data()).HasParseError()) {
+    if (document.HasMember("fw_ver") && document["fw_ver"].IsString()) {
+      fw_version_ = document["fw_ver"].GetString();
+    }
+  }
+  // task_sub_ = hj_bf::HJSubscribe("/middleware_task", 1, &Monitor::TaskCallBack, this);
+  task_name_sub_ = hj_bf::HJSubscribe("/middleware_task_name", 1, &Monitor::TaskNameCallBack, this);
+  bootType_pub_ = hj_bf::HJAdvertise<hj_interface::BootType>("/boot_type", 1, true);
   auto state = std::thread(&Monitor::CalCpuMemeory, this);
   state.detach();
-  coredump_upload_timer_ = hj_bf::HJCreateTimer("coredump_upload_timer",
-                1000 * 1000, &Monitor::UploadCoredump, this);  // 30HZ
+  auto coredump_upload_thread = std::thread(&Monitor::UploadCoredump, this);
+  coredump_upload_thread.detach();
 }
 }  // namespace collect_node_utils_func

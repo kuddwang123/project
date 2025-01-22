@@ -25,11 +25,13 @@ struct LedByTask_
 
   LedByTask_()
     : task_led(0)
-    , clean_mode_led(0)  {
+    , clean_mode_led(0)
+    , led_mode(0)  {
     }
   LedByTask_(const ContainerAllocator& _alloc)
     : task_led(0)
-    , clean_mode_led(0)  {
+    , clean_mode_led(0)
+    , led_mode(0)  {
   (void)_alloc;
     }
 
@@ -40,6 +42,9 @@ struct LedByTask_
 
    typedef int32_t _clean_mode_led_type;
   _clean_mode_led_type clean_mode_led;
+
+   typedef int32_t _led_mode_type;
+  _led_mode_type led_mode;
 
 
 
@@ -71,7 +76,8 @@ template<typename ContainerAllocator1, typename ContainerAllocator2>
 bool operator==(const ::hj_interface::LedByTask_<ContainerAllocator1> & lhs, const ::hj_interface::LedByTask_<ContainerAllocator2> & rhs)
 {
   return lhs.task_led == rhs.task_led &&
-    lhs.clean_mode_led == rhs.clean_mode_led;
+    lhs.clean_mode_led == rhs.clean_mode_led &&
+    lhs.led_mode == rhs.led_mode;
 }
 
 template<typename ContainerAllocator1, typename ContainerAllocator2>
@@ -128,12 +134,12 @@ struct MD5Sum< ::hj_interface::LedByTask_<ContainerAllocator> >
 {
   static const char* value()
   {
-    return "f05dfb0b95782fbe754ef8eeb8e3a4d5";
+    return "09f80e0049520d73c27b81ba61ffe4c2";
   }
 
   static const char* value(const ::hj_interface::LedByTask_<ContainerAllocator>&) { return value(); }
-  static const uint64_t static_value1 = 0xf05dfb0b95782fbeULL;
-  static const uint64_t static_value2 = 0x754ef8eeb8e3a4d5ULL;
+  static const uint64_t static_value1 = 0x09f80e0049520d73ULL;
+  static const uint64_t static_value2 = 0xc27b81ba61ffe4c2ULL;
 };
 
 template<class ContainerAllocator>
@@ -154,6 +160,7 @@ struct Definition< ::hj_interface::LedByTask_<ContainerAllocator> >
   {
     return "int32 task_led          # 1-all in one, 2-池底 3-池壁+池底+水线(X9) or 池壁(T1PRO) 4-水面(X9) or 水线(T1PRO) 5-其他\n"
 "int32 clean_mode_led    # 1-变频 2-标准 3-深度\n"
+"int32 led_mode          # 1-常亮 2-闪烁\n"
 ;
   }
 
@@ -174,6 +181,7 @@ namespace serialization
     {
       stream.next(m.task_led);
       stream.next(m.clean_mode_led);
+      stream.next(m.led_mode);
     }
 
     ROS_DECLARE_ALLINONE_SERIALIZER
@@ -196,6 +204,8 @@ struct Printer< ::hj_interface::LedByTask_<ContainerAllocator> >
     Printer<int32_t>::stream(s, indent + "  ", v.task_led);
     s << indent << "clean_mode_led: ";
     Printer<int32_t>::stream(s, indent + "  ", v.clean_mode_led);
+    s << indent << "led_mode: ";
+    Printer<int32_t>::stream(s, indent + "  ", v.led_mode);
   }
 };
 

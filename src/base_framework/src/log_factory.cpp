@@ -10,17 +10,30 @@
 #include <dirent.h>
 #include <log4cxx/helpers/properties.h>
 #include <log4cxx/rollingfileappender.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
+#include <ros/console.h>
 
 #include <algorithm>
+#include <boost/filesystem.hpp>
+#include <fstream>
 
+#include "hj_utils.h"
 #include "log4cxx/appenderskeleton.h"
 #include "log4cxx/logger.h"
 #include "log4cxx/propertyconfigurator.h"
 #include "log4cxx/spi/loggingevent.h"
 #include "node_factory.h"
+#include "rapidjson/document.h"
+#include "rapidjson/error/en.h"
+#include "rapidjson/filereadstream.h"
+#include "shm_interface.h"
 namespace hj_bf {
+
 // constexpr char g_log_config_path_param_name[] = "HJ_LOG_CONFIG_PATH";
 constexpr char g_log_close[] = "HJ_LOG_CLOSE_";
+constexpr char g_remote_config_file_lock_name[] = "remote log config lock";
+static std::string g_remote_config_path = "";
 void deleteFilesWithPrefix(const std::string& directory, const std::string& prefix) {
   DIR* dir = opendir(directory.c_str());
   if (dir == nullptr) {
@@ -43,7 +56,19 @@ void deleteFilesWithPrefix(const std::string& directory, const std::string& pref
   }
   closedir(dir);
 }
+bool logLevelSetRos(const std::string& level_str) {
+  ros::console::levels::Level level;
+  if (level_str == "debug") {
+    level = ros::console::levels::Info;
+  } else if (level_str == "release") {
+    level = ros::console::levels::Error;
+  } else {
+    return false;
+  }
 
+  bool ret = ::ros::console::set_logger_level("ros", level);
+  return ret;
+}
 bool logInit(const std::string& config_path, const std::vector<unsigned char>& pass_word) {
   bool ret = false;
   log4cxx::PropertyConfigurator::configure(config_path.c_str());
@@ -74,10 +99,120 @@ bool logInit(const std::string& config_path, const std::vector<unsigned char>& p
       appender->activateOptions(p);
       ret = true;
     }
-    
+
   } else {
     std::cerr << "err appender == null:" << std::endl;
   }
   return ret;
+}
+bool readConfig(rapidjson::Document* document) {
+  std::string file_name = g_remote_config_path + "/" + g_remote_config_name;
+  hj_bf::MinosLock my_lock(g_remote_config_file_lock_name);
+  int state = access(file_name.c_str(), R_OK | W_OK);
+  if (state == -1) {
+    std::cerr << "file not exist :" << file_name << std::endl;
+    boost::filesystem::path dir_path(g_remote_config_path);
+    if (!boost::filesystem::exists(dir_path)) {
+      if (boost::filesystem::create_directories(dir_path)) {
+        std::cout << "Directories created successfully :" << g_remote_config_path << std::endl;
+      } else {
+        std::cerr << "Directories already exist." << g_remote_config_path << std::endl;
+      }
+    }
+
+    std::ofstream outfile;
+    outfile.open(file_name, std::ios_base::out);
+    if (!outfile.is_open()) {
+      return false;
+    }
+    outfile.close();
+  }
+
+  std::ifstream config_file;
+  config_file.open(file_name, std::ios::in | std::ios::binary);
+  if (!config_file.is_open()) {
+    std::cerr << "config file not exist!, name :" << file_name << std::endl;
+    return false;
+  }
+  std::string data((std::istreambuf_iterator<char>(config_file)), (std::istreambuf_iterator<char>()));
+
+  document->Parse<rapidjson::kParseCommentsFlag | rapidjson::kParseTrailingCommasFlag>(data.c_str());
+  if (!document->HasParseError() && document->IsObject()) {
+  } else {
+    std::cerr << "cant analysis " << file_name << " string to json" << std::endl;
+    std::remove(file_name.c_str());
+    return false;
+  }
+  return true;
+}
+static bool writeConfig(const rapidjson::Document& document) {
+  std::string file_name = g_remote_config_path + "/" + g_remote_config_name;
+  hj_bf::MinosLock my_lock(g_remote_config_file_lock_name);
+  int state = access(file_name.c_str(), R_OK | W_OK);
+  if (state == -1) {
+    boost::filesystem::path dir_path(g_remote_config_path);
+    if (!boost::filesystem::exists(dir_path)) {
+      if (boost::filesystem::create_directories(dir_path)) {
+        std::cout << "Directories created successfully :" << g_remote_config_path << std::endl;
+      } else {
+        std::cerr << "Directories already exist." << g_remote_config_path << std::endl;
+      }
+    }
+  }
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+  document.Accept(writer);
+  std::ofstream outfile;
+  outfile.open(file_name, std::ios_base::out);
+  if (!outfile.is_open()) {
+    return false;
+  }
+  outfile << buffer.GetString() << std::endl;
+  outfile.close();
+  return true;
+}
+
+bool readRemoteConfigure(std::shared_ptr<struct NodeConfig> out_config, bool create, const std::string& remote_path) {
+  if (remote_path != "") {
+    g_remote_config_path = remote_path;  // out_config->remote_config_path;
+  }
+  rapidjson::Document document;
+  if (readConfig(&document)) {
+    std::cout << "readConfig success" << std::endl;
+    if (document.HasMember("log_level") && document["log_level"].IsString()) {
+      out_config->log_level = document["log_level"].GetString();
+      std::cerr << "rreadRemoteConfigure log_level:" << out_config->log_level << std::endl;
+    }
+  } else if (create == true) {
+    std::cerr << "readConfig fail and will create it" << std::endl;
+    document.SetObject();
+    rapidjson::Value keyValue(out_config->log_level.c_str(), document.GetAllocator());
+    document.AddMember("log_level", keyValue, document.GetAllocator());
+    writeConfig(document);
+  } else {
+    std::cerr << "readConfig fail" << std::endl;
+    return false;
+  }
+  return true;
+}
+
+bool setLogLevelConfigure(const std::string& level) {
+  rapidjson::Document document;
+  if (readConfig(&document)) {
+    if (document.HasMember("log_level") && document["log_level"].IsString()) {
+      document["log_level"].SetString(level.c_str(), document.GetAllocator());
+      writeConfig(document);
+    } else {
+      std::cerr << "readConfig and have not key log_level " << std::endl;
+      return false;
+    }
+  } else {
+    std::cerr << "readConfig fail and will create it" << std::endl;
+    document.SetObject();
+    rapidjson::Value keyValue(level.c_str(), document.GetAllocator());
+    document.AddMember("log_level", keyValue, document.GetAllocator());
+    writeConfig(document);
+  }
+  return true;
 }
 }  // namespace hj_bf

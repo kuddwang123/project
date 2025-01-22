@@ -4,10 +4,11 @@
 #include "hjlog.h"
 #include <boost/any.hpp>
 #include "boost/filesystem.hpp"
+#include "hj_interface/BigdataUpload.h"
 
 namespace aiper_ota {
+const char* kOtaRemoveRemoteConfigFile = "/userdata/hj/config/remote_config.json";
 const char* Schedule::cloudVerFile_ = "/userdata/logic/cloud_version.json";
-
 Schedule::Schedule(ros::NodeHandle n):
     n_(n),
     runflag_(false),
@@ -31,6 +32,8 @@ Schedule::Schedule(ros::NodeHandle n):
     otaPeportPub_ = n_.advertise<hj_interface::AppMsg>("ReportApp", 10);
     otaEnterPub_ = n_.advertise<std_msgs::UInt8>("OtaEnterReq", 1);
     otaQuitPub_ = n_.advertise<std_msgs::UInt8>("OtaQuit", 1);
+    otaSucTrigerLogPub_ = n_.advertise<std_msgs::UInt8>("otaSucTrigerLog", 1);
+    buryPointPub_ = n_.advertise<hj_interface::BigdataUpload>("/big_data_cmd", 10);
 
     while (otaAppResPub_.getNumSubscribers() == 0 || 
         otaPeportPub_.getNumSubscribers() == 0) {
@@ -42,8 +45,12 @@ Schedule::Schedule(ros::NodeHandle n):
 
     boost::filesystem::path dir("/userdata/logic");
     if (!boost::filesystem::is_directory(dir)) {
-        assert(boost::filesystem::create_directories(dir));
+        if (!boost::filesystem::create_directories(dir)) {
+            HJ_CST_TIME_ERROR(ota_logger, "creat dic [%s] fail\n");
+        }
     }
+
+    bp_.setTriggetCb(boost::bind(&Schedule::uploadBuryPoint, this, boost::placeholders::_1));
 }
 
 Schedule::~Schedule()
@@ -299,35 +306,75 @@ void Schedule::urlOtaResp(const hj_interface::AppMsg& appMsg, int res)
 void Schedule::urlOtaTriggerCallBack(const hj_interface::AppMsg::ConstPtr& msg)
 {
     HJ_CST_TIME_DEBUG(ota_logger, "receive url ota:\n%s\n", msg->appdata.at(0).payload.c_str());
+    std::string nextver;
+    int mode;
+    nlohmann::json urldata(nlohmann::json::object());
+
+    try {
+        urldata = nlohmann::json::parse(msg->appdata.at(0).payload);
+        mode = urldata["sites"]["type"];
+        std::string md5 = urldata["sites"]["md5"].get<std::string>();
+        std::string url = urldata["sites"]["url"].get<std::string>();
+        nextver = urldata["version"];
+
+        if (md5.empty() || url.empty() || nextver.empty()) {
+            HJ_CST_TIME_DEBUG(ota_logger, "download para invalid:[%s] [%s] [%s]\n", 
+                md5.c_str(), url.c_str(), nextver.c_str());
+            //runflag_.store(false);
+            urlOtaResp(*msg.get(), -1);
+            return;
+        }
+    } catch (const std::exception& e) {
+        HJ_CST_TIME_ERROR(ota_logger, "Json parse fail\n");
+        //runflag_.store(false);
+        urlOtaResp(*msg.get(), -1);
+        return;
+    }
 
     if (runflag_.load()) {
-        HJ_CST_TIME_DEBUG(ota_logger, "Ota is running: [%d]\n", mode_);        
+        HJ_CST_TIME_DEBUG(ota_logger, "Ota is running: [%d]\n", mode_);
+        BuryPoint buryPoint;
+        buryPoint.init(mode, nextver);
+        buryPoint.setTriggetCb(boost::bind(&Schedule::uploadBuryPoint, this, boost::placeholders::_1));        
+
         if (mode_ == 0) {
             urlOtaResp(*msg.get(), -1);
             HJ_CST_TIME_DEBUG(ota_logger, "Manual ota is running, return\n");
+            buryPoint.endUpgrade(false, BP_ALREADY_IN_OTA, 2, "");
             return;
         } else if (mode_ == 1 && otaPermit_ == 1) {
             urlOtaResp(*msg.get(), -1);
             HJ_CST_TIME_DEBUG(ota_logger, "Auto ota is deep running, return\n");
+            buryPoint.endUpgrade(false, BP_ALREADY_IN_OTA, 2, "");
             return;
         } else if (mode_ == 1 && dowloadPtr_->getStatus() == WORKING) {
-            //cancel download
             autoDlRun_.store(false);
             dowloadPtr_->stop();
             if (workThread_.joinable()) {
                 workThread_.join();
             }
+            bp_.endUpgrade(false, BP_INTRRUPT_BY_MANUAL, 2, "");
             HJ_CST_TIME_DEBUG(ota_logger, "Last auto ota stoped!\n");
         } else {
             urlOtaResp(*msg.get(), -1);
             HJ_CST_TIME_DEBUG(ota_logger, "Ota is running, return\n");
-            return;
+            buryPoint.endUpgrade(false, BP_ALREADY_IN_OTA, 2, "");
+            return; 
         }
     }
 
+    urlOtaJson_ = urldata;
+    mode_ = mode;
     runflag_.store(true);
     otaAppMsg_ = *msg.get();
+    bp_.init(mode_, nextver);
 
+    if (workThread_.joinable()) {
+        workThread_.join();
+    }
+    
+    workThread_ = std::thread(&Schedule::doOtaThread, this);
+/*
     try {
         urlOtaJson_ = nlohmann::json::parse(msg->appdata.at(0).payload);
         mode_ = urlOtaJson_["sites"]["type"];
@@ -353,7 +400,7 @@ void Schedule::urlOtaTriggerCallBack(const hj_interface::AppMsg::ConstPtr& msg)
         urlOtaResp(*msg.get(), -1);
         return;
     }
-
+*/
     return;
 }
 
@@ -372,6 +419,7 @@ void Schedule::doOtaThread()
        HJ_CST_TIME_ERROR(ota_logger, "no enough in userdata: %lld\n", userdataAvail);
        urlOtaResp(otaAppMsg_, -1);
        runflag_.store(false);
+       bp_.endUpgrade(false, BP_FAIL_TO_DL_NO_SPACE, 2, "");
        return; 
     }
 
@@ -411,6 +459,7 @@ void Schedule::doManualOta()
             otaPermit_ = 255;
             runflag_.store(false);
             urlOtaResp(otaAppMsg_, -1);
+            bp_.endUpgrade(false, BP_ENTER_OTA_REJECT_BY_MID, 2, "");
             return;
         }
     }
@@ -420,27 +469,35 @@ void Schedule::doManualOta()
         otaPermit_ = 255;
         runflag_.store(false);
         urlOtaResp(otaAppMsg_, -1);
+        bp_.endUpgrade(false, BP_ENTER_OTA_REJECT_BY_MID, 2, "");
         return;
     }
 
     urlOtaResp(otaAppMsg_, 0);
     
-    assert(saveCloudVerFile());
+    bool ret = saveCloudVerFile();
+    assert(ret);
 
     dlpara.timeout_ = 35 * 60; //35min
+    bp_.startDownLoad();
     if (!dowloadPtr_->dowork(boost::any(dlpara))) {
         HJ_CST_TIME_ERROR(ota_logger, "download work fail\n");
+        bp_.endDownLoad(dowloadPtr_->getDlResult());
+        bp_.endUpgrade(false, dowloadPtr_->getDlResult(), 2, "");
         endpara.endState_ = DOWNLOAD_STATE;
         endPtr_->dowork(boost::any(endpara));
         otaPermit_ = 255;
         runflag_.store(false);
         return;
     }
+    bp_.endDownLoad(dowloadPtr_->getDlResult());
     HJ_CST_TIME_DEBUG(ota_logger, "download work success\n");
 
     std::string nextver = urlOtaJson_["version"];
+    bp_.startUpgrade();
     if (!unpackPtr_->dowork(boost::any(nextver))) {
         HJ_CST_TIME_ERROR(ota_logger, "unpack work fail\n");
+        bp_.endUpgrade(false, BP_UNPACK_FAIL, 2, unpackPtr_->getUnPackFailMsg());
         endpara.endState_ = UNPACK_STATE;
         endPtr_->dowork(boost::any(endpara));
         otaPermit_ = 255;
@@ -452,12 +509,14 @@ void Schedule::doManualOta()
     auto cutinfo = unpackPtr_->getCutMsg(); 
     if (!upGradePtr_->dowork(boost::any(cutinfo))) {
         HJ_CST_TIME_ERROR(ota_logger, "upgrade work fail\n");
+        bp_.endUpgrade(false, upGradePtr_->getFailModule(), upGradePtr_->getAngoOta(), upGradePtr_->getFailMsg());
         endpara.endState_ = UPGRADE_FAIL_STATE;
         endpara.failModule_ = upGradePtr_->getFailModule();
         endPtr_->dowork(boost::any(endpara));
         return;
     }
     HJ_CST_TIME_DEBUG(ota_logger, "upgrade work success\n");
+    bp_.saveBuryDataToFile(upGradePtr_->getAngoOta());
 
     endpara.endState_ = UPGRADE_SUCC_STATE;
     endPtr_->dowork(boost::any(endpara));
@@ -477,10 +536,12 @@ void Schedule::doAutoOta()
     dlpara.timeout_ = -1;
     otaPermit_ = 255;
 
-    assert(saveCloudVerFile());
+    bool ret = saveCloudVerFile();
+    assert(ret);
 
     bool dlresult = false;
     autoDlRun_.store(true);
+    bp_.startDownLoad();
     while (!dlresult && autoDlRun_.load()) {
         dlresult = dowloadPtr_->dowork(boost::any(dlpara));
         if (!autoDlRun_.load()) {
@@ -493,8 +554,8 @@ void Schedule::doAutoOta()
         std::this_thread::sleep_for(std::chrono::seconds(10));
     }
     HJ_CST_TIME_DEBUG(ota_logger, "download work success\n");
-
-    otaStatusRptCb(2, 0, "", 0);
+    bp_.endDownLoad(BP_OK);
+    //otaStatusRptCb(2, 0, "", 0);
 
     while (runflag_.load()) {
         otaEnterPub_.publish(msg);
@@ -510,7 +571,7 @@ void Schedule::doAutoOta()
 
             if (otaPermit_ == 1) {
                 HJ_CST_TIME_DEBUG(ota_logger, "permit enter ota\n");
-                otaStatusRptCb(2, 30, "", 0);
+                otaStatusRptCb(2, 20, "", 0);
                 sleep(5);
                 break;
             } else {
@@ -522,8 +583,10 @@ void Schedule::doAutoOta()
     }
 
     std::string nextver = urlOtaJson_["version"];
+    bp_.startUpgrade();
     if (!unpackPtr_->dowork(boost::any(nextver))) {
         HJ_CST_TIME_ERROR(ota_logger, "unpack work fail\n");
+        bp_.endUpgrade(false, BP_UNPACK_FAIL, 2, unpackPtr_->getUnPackFailMsg());
         endpara.endState_ = UNPACK_STATE;
         endPtr_->dowork(boost::any(endpara));
         otaPermit_ = 255;
@@ -535,16 +598,28 @@ void Schedule::doAutoOta()
     auto cutinfo = unpackPtr_->getCutMsg(); 
     if (!upGradePtr_->dowork(boost::any(cutinfo))) {
         HJ_CST_TIME_ERROR(ota_logger, "upgrade work fail\n");
+        bp_.endUpgrade(false, upGradePtr_->getFailModule(), upGradePtr_->getAngoOta(), upGradePtr_->getFailMsg());
         endpara.endState_ = UPGRADE_FAIL_STATE;
         endpara.failModule_ = upGradePtr_->getFailModule();
         endPtr_->dowork(boost::any(endpara));
         return;
     }
     HJ_CST_TIME_DEBUG(ota_logger, "upgrade work success\n");
+    bp_.saveBuryDataToFile(upGradePtr_->getAngoOta());
 
     endpara.endState_ = UPGRADE_SUCC_STATE;
     endPtr_->dowork(boost::any(endpara));
     return;
+}
+
+void Schedule::uploadBuryPoint(std::string data)
+{
+    HJ_CST_TIME_DEBUG(ota_logger, "trigger bury point:\n");
+    HJ_CST_TIME_DEBUG(ota_logger, "%s\n", data.c_str());
+
+    hj_interface::BigdataUpload msg;
+    msg.payload = data;
+    buryPointPub_.publish(msg);
 }
 
 void Schedule::doRollBackOta()
@@ -617,11 +692,24 @@ void Schedule::otaCheck()
         return;
     }
 
-    assert(utils::isFileExist(cloudVerFile_));
+    bool fileExist = false;
+    fileExist = utils::isFileExist(cloudVerFile_);
+    assert(fileExist);
+    if (!fileExist) {
+        HJ_CST_TIME_ERROR(ota_logger, "cloud file [%s] not exist\n", cloudVerFile_);
+        utils::emptyDir("/userdata/ota/");
+        return;
+    }
 
     std::ifstream fwCutFile(Unpack::cutResultFile_);
     std::ifstream cloudVerFile(cloudVerFile_);
-    assert(fwCutFile.is_open() && cloudVerFile.is_open());
+
+    if (!fwCutFile.is_open() || !cloudVerFile.is_open()) {
+        HJ_CST_TIME_ERROR(ota_logger, "open file fail\n");
+        utils::emptyDir("/userdata/ota/");
+        return;
+    }
+
     nlohmann::json cutResultJson;
     nlohmann::json cloudVerJson;
 
@@ -701,9 +789,28 @@ void Schedule::otaCheck()
     
     utils::emptyDir("/userdata/ota/");
 
+    if (bp_.initFromFile()) {
+        if (totalstate == 1) {
+            bp_.endUpgrade(true, BP_OK, 0, "");
+        } else {
+            if (socstate == 0) {
+                bp_.endUpgrade(false, BP_SOC_OTA_FAIL, 0, "");
+            } else if (ledstate == 0) {
+                bp_.endUpgrade(false, BP_MCU_LED_OTA_FAIL, 0, "");
+            } else if (basestate == 0) {
+                bp_.endUpgrade(false, BP_MCU_BASE_OTA_FAIL, 0, "");
+            }
+        }
+    }
+
     if (socstate == 0) {
         HJ_CST_TIME_DEBUG(ota_logger, "soc ota fail, do mcu roll back\n");
         doRollBackOta();
+    } else {
+      std_msgs::UInt8 msg;
+      msg.data = 1;
+      otaSucTrigerLogPub_.publish(msg);
+      HJ_CST_TIME_DEBUG(ota_logger, "trigger ota success\n");
     }
 
     return;

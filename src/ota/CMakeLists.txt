@@ -8,7 +8,7 @@ catkin_package(CATKIN_DEPENDS roscpp std_srvs)
 set( HJ_WORKSPACE_PATH "..")
 set(PLATFORM "amd64" CACHE STRING "amd64, i386, arm64_rk, etc.")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 add_definitions(-DENABLE_CSTLOG)
 include_directories(
   ${catkin_INCLUDE_DIRS}
@@ -23,6 +23,7 @@ add_executable(ota
 src/Utils.cc
 src/Main.cc
 src/Schedule.cc
+src/BuryPoint.cc
 src/State/Download.cc
 src/State/Unpack.cc
 src/State/Upgrade.cc

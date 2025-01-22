@@ -1,10 +1,11 @@
 {
   "so_dir":"/data/hj/lib",
-  "log_path_config":"/data/hj/config/hj_log.config",
+  "log_path_config":"/data/hj/config/hj_log_middleware_node.config",
   "all_log_close":true,
   "node_log_close":false,
   "node_name":"middleware_node",
   "node_threads":4,
+  "remote_config_path":"/userdata/hj/config",
   "functions": [
       {
         "ID": "core_dump",
@@ -16,11 +17,6 @@
         "name": "log_redirect",
         "err_log_file_path": "/userdata/hj/log/logging/",
         "cout_log_file_path": ""
-      },
-      {
-        "ID": "ota_schedule",
-        "name": "ota_schedule",
-        "test_transmit": "well come ota_schedule"
       },
       {
         "ID": "parse_sys_com",

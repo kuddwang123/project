@@ -48,7 +48,7 @@ int main(int argc, char** argv)
     ros::init(argc, argv, "ota_node", ros::init_options::NoRosout);
     
     ros::NodeHandle n;
-    ota_logger = hj_cst_log_add("/userdata/hj/log/ota.log", TRACE_LOG, 1024 * 1024 * 10, 3);
+    ota_logger = hj_cst_log_add("/userdata/hj/log/ota.log", TRACE_LOG, 1024 * 100, 3);
 
     aiper_ota::Schedule otaSchedule(n);
     otaSchedule.construct();

@@ -44,20 +44,11 @@ do
 	kill -s 9 $item
 	echo "kill -s -9 $item"
 done
-#.unset test_flag
-#./log_recorder > /dev/null &
-#.sudo date -s "2024-11-14 20:07:00"
-#.date 
 
-#${node_path}devel/lib/collect_node/collect_node &
-#.sleep 10
-#.set test_flag=test
-#.echo $test_flag
-#.sudo date -s "2024-11-14 20:06:50"
-#.date 
+#./log_recorder > /dev/null &
+
+${node_path}devel/lib/collect_node/collect_node &
 #${node_path}devel/lib/middleware_node/middleware_node > /dev/null &
 #${node_path}devel/lib/planning_node/planning_node > /dev/null &
 #${node_path}devel/lib/slam_node/slam_node 
 #${node_path}devel/lib/utils_node/utils_node &
-
-./ota_test.sh > /tmp/ota_test_log &

@@ -121,7 +121,7 @@ uint8_t IotShadowClient::subToDeleteShadowAccepted()
 
     shadowClient_.SubscribeToDeleteShadowAccepted(
         req,
-        AWS_MQTT_QOS_AT_LEAST_ONCE,
+        AWS_MQTT_QOS_AT_MOST_ONCE,
         boost::bind(&IotShadowClient::deleteShadowAcceptedCb, this, 
                     boost::placeholders::_1, boost::placeholders::_2),
         subAck      
@@ -160,7 +160,7 @@ uint8_t IotShadowClient::subToDeleteShadowRejected()
 
     shadowClient_.SubscribeToDeleteShadowRejected(
         req,
-        AWS_MQTT_QOS_AT_LEAST_ONCE,
+        AWS_MQTT_QOS_AT_MOST_ONCE,
         boost::bind(&IotShadowClient::deleteShadowRejectedCb, this, 
                     boost::placeholders::_1, boost::placeholders::_2),
         subAck      
@@ -198,7 +198,7 @@ uint8_t IotShadowClient::subToGetShadowAccepted()
 
     shadowClient_.SubscribeToGetShadowAccepted(
         req,
-        AWS_MQTT_QOS_AT_LEAST_ONCE,
+        AWS_MQTT_QOS_AT_MOST_ONCE,
         boost::bind(&IotShadowClient::getShadowAcceptedCb, this, 
                     boost::placeholders::_1, boost::placeholders::_2),
         subAck      
@@ -236,7 +236,7 @@ uint8_t IotShadowClient::subToGetShadowRejected()
 
     shadowClient_.SubscribeToGetShadowRejected(
         req,
-        AWS_MQTT_QOS_AT_LEAST_ONCE,
+        AWS_MQTT_QOS_AT_MOST_ONCE,
         boost::bind(&IotShadowClient::getShadowRejectedCb, this, 
                     boost::placeholders::_1, boost::placeholders::_2),
         subAck      
@@ -274,7 +274,7 @@ uint8_t IotShadowClient::subToUpdateShadowAccepted()
 
     shadowClient_.SubscribeToUpdateShadowAccepted(
         req,
-        AWS_MQTT_QOS_AT_LEAST_ONCE,
+        AWS_MQTT_QOS_AT_MOST_ONCE,
         boost::bind(&IotShadowClient::updateShadowAcceptedCb, this, 
                     boost::placeholders::_1, boost::placeholders::_2),
         subAck      
@@ -312,7 +312,7 @@ uint8_t IotShadowClient::subToUpdateShadowRejected()
 
     shadowClient_.SubscribeToUpdateShadowRejected(
         req,
-        AWS_MQTT_QOS_AT_LEAST_ONCE,
+        AWS_MQTT_QOS_AT_MOST_ONCE,
         boost::bind(&IotShadowClient::updateShadowRejectedCb, this, 
                     boost::placeholders::_1, boost::placeholders::_2),
         subAck      
@@ -350,7 +350,7 @@ uint8_t IotShadowClient::subToShadowDeltaUpdatedEvents()
 
     shadowClient_.SubscribeToShadowDeltaUpdatedEvents(
         req,
-        AWS_MQTT_QOS_AT_LEAST_ONCE,
+        AWS_MQTT_QOS_AT_MOST_ONCE,
         boost::bind(&IotShadowClient::shadowDeltaUpdatedEventsCb, this, 
                     boost::placeholders::_1, boost::placeholders::_2),
         subAck      
@@ -388,7 +388,7 @@ uint8_t IotShadowClient::subToShadowUpdatedEvents()
 
     shadowClient_.SubscribeToShadowUpdatedEvents(
         req,
-        AWS_MQTT_QOS_AT_LEAST_ONCE,
+        AWS_MQTT_QOS_AT_MOST_ONCE,
         boost::bind(&IotShadowClient::shadowUpdatedEventsCb, this, 
                     boost::placeholders::_1, boost::placeholders::_2),
         subAck      

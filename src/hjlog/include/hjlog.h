@@ -9,7 +9,8 @@
 #define FATAL_LOG 5
 
 ssize_t hjlog_append(void*, unsigned int,
-               const char*, unsigned int, bool, const char *format, ...); 
+               const char*, unsigned int, bool, const char *format, ...);
+ssize_t msg_append(void*, const char *format, ...);
 
 #ifdef ENABLE_CSTLOG
 #define HJ_CST_TRACE(log, fmt, ...)      \

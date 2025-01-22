@@ -33,7 +33,7 @@ bool Magnetometer::CheckDataReady() {
   if (count >= ERROR_COUNT_MAX) {
     if (init_status_) {
       srv_msg_.request.code_val = MAG_DATA_ERROR;
-      srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::ERROR;
+      srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::WARNING;
       hj_bf::HjPushSrv(srv_msg_);
       HJ_ERROR("mag CheckDataReady false");
     }
@@ -78,7 +78,7 @@ void Magnetometer::LoopFunc(const hj_bf::HJTimerEvent &) {
   } else {
     if (status_ && error_count_ > ERROR_COUNT_MAX) {
       srv_msg_.request.code_val = MAG_DATA_ERROR;
-      srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::ERROR;
+      srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::WARNING;
       hj_bf::HjPushSrv(srv_msg_);
       status_ = false;
       HJ_ERROR("mag read data from device error");
@@ -101,7 +101,7 @@ bool Magnetometer::Start() {
     HJ_ERROR("can not open file %s", DEV_PATH);
     init_status_ = false;
     srv_msg_.request.code_val = MAG_INIT_ERROR;
-    srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::FAILED;
+    srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::WARNING;
     hj_bf::HjPushSrv(srv_msg_);
   } else {
     init_status_ = true;

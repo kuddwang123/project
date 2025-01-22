@@ -5,10 +5,13 @@ set( HJ_WORKSPACE_PATH "..")
 set(PLATFORM "amd64" CACHE STRING "amd64, i386, arm64_rk, etc.")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON) 
 add_definitions(-DPLATFORM=${PLATFORM})
-if(NOT DEFINED ${RELEASE_VER} OR ${RELEASE_VER} STREQUAL "debug")
+set(RELEASE_VER "debug" CACHE STRING "debug or release")
+if(${RELEASE_VER} STREQUAL "debug")
 
 elseif(${RELEASE_VER} STREQUAL "release")
   add_definitions(-DCONFIG_ENABLE_LOG=4)
+  set(CMAKE_BUILD_TYPE "RELEASE")
+  set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 endif()
 find_package(catkin REQUIRED COMPONENTS message_generation rostime roscpp std_msgs)
 
@@ -29,7 +32,7 @@ link_directories("${HJ_WORKSPACE_PATH}/thirdparty/platforms/${PLATFORM}")
 catkin_package(CATKIN_DEPENDS message_runtime std_msgs)
 
 add_library(base_framework src/node_factory.cpp src/function_factory.cpp 
-          src/log_factory.cpp src/node_cache.cpp src/shm.cpp src/hj_zip.cpp)
+          src/log_factory.cpp src/node_cache.cpp src/shm.cpp src/hj_zip.cpp src/hj_utils.cpp)
 target_link_libraries(base_framework ${catkin_LIBRARIES} rt)
 target_link_libraries(base_framework libzip.so)
 

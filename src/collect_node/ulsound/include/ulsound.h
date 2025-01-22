@@ -12,12 +12,14 @@
 #define SRC_COLLECT_NODE_ULSOUND_INCLUDE_ULSOUND_H_
 #include <string>
 #include <mutex>
+#include <condition_variable>
 #include "function_factory.h"
 #include "node_factory.h"
 #include "uart.h"
 #include "status_code.h"
 #include "node_cache.h"
-#include "std_msgs/Bool.h"
+// #include "std_msgs/Bool.h"
+#include "std_msgs/UInt8.h"
 #include "std_msgs/Float64.h"
 #include "hj_interface/TripleUltra.h"
 #include "hj_interface/LeftBack.h"
@@ -28,8 +30,12 @@
 #define DEV_PATH_FRONT     "/dev/ttyWCH0"
 #define DEV_PATH_SIDE      "/dev/ttyWCH2"
 #define SWITCH_PATH_SIDE   "/dev/gpiosw-uls"
-#define ERROR_COUNT 10
-#define OUTWATER_DISTANCE 65531  // 65531mm,代表单波出水
+#define ERROR_COUNT            10
+#define TRIPLE_ULTRA_FREQUENCY 14
+#define FRONT_10S_COUNT        (TRIPLE_ULTRA_FREQUENCY * 10)  // 三合一70ms, 142帧约等于10s
+#define ULTRA_FREQUENCY        45  // 单波超声45HZ
+#define ULTRA_10S_COUNT        (ULTRA_FREQUENCY * 10)  // 单波超声45HZ, 450帧约等于10s
+#define OUTWATER_DISTANCE      65531  // 65531mm,代表单波出水
 
 
 namespace collect_node_ulsound {  // your namespace
@@ -37,6 +43,14 @@ namespace collect_node_ulsound {  // your namespace
 typedef struct serial_data {
   uint8_t databuf[64];  // 发送/接受数据
 } ser_Data;
+
+typedef enum {
+  kRetFail = 1,
+  kRetOk = 0,
+  kRetError = -1,
+  kRetTimeout = -2,
+  kRetNone = 9999
+} ReturnType;
 
 class Ulsound : public hj_bf::Function {
  public:
@@ -51,12 +65,18 @@ class Ulsound : public hj_bf::Function {
   void PushSideFrontError();
   void PushSideBackError();
   void PushDownError();
-  void RestartCallback(const std_msgs::Bool::ConstPtr& msg);
+  // void RestartCallback(const std_msgs::Bool::ConstPtr& msg);
   void TimeDiffCallback(const std_msgs::Float64::ConstPtr& msg);
+  void CalibrationCallback(const std_msgs::UInt8::ConstPtr& msg);
   ros::Time GetTimeNow();
   bool Start();
+  int WriteToSerial(int fd, const uint8_t *buffer, size_t size);
+  int ReadFromSerial(int fd, uint8_t *buffer, size_t size);
+  int VerifyInwater(int fd);
+  void CalibrationThread();
  private:
-  std::atomic<bool> restart_flag_{false};  // 重启标志
+  std::atomic<bool> calibration_flag_{false};  // 校验标志
+  std::atomic<bool> reading_flag_{true};  // 重启标志
   bool front_init_status_{false};  // 初始化状态
   bool side_init_status_{false};  // 初始化状态
   bool side_front_init_status_{false};  // 初始化状态
@@ -67,15 +87,20 @@ class Ulsound : public hj_bf::Function {
   bool side_back_uls_status_{true};   // 侧向超声波开关状态
   bool down_uls_status_{true};   // 侧向超声波开关状态
   int front_error_count_{0};
+  int front_normal_count_{0};
   int side_front_error_count_{0};
+  int side_front_normal_count_{0};
   int side_back_error_count_{0};
+  int side_back_normal_count_{0};
   int down_error_count_{0};
+  int down_normal_count_{0};
   int front_uls_frequency_{70};
   std::atomic<double> time_diff_{0.0};  // system time and RTC time diff
   ser_Data front_data_;
   ser_Data rec_data_;
   std::mutex mutex_;
-  std::mutex srv_mutex_;
+  std::condition_variable cv_;
+  // std::mutex srv_mutex_;
   hj_interface::HealthCheckCode srv_msg_;
   hj_bf::SpiUart front_uart_{DEV_PATH_FRONT};
   hj_bf::SpiUart side_uart_{DEV_PATH_SIDE};
@@ -84,7 +109,8 @@ class Ulsound : public hj_bf::Function {
   hj_bf::SpiUart down_uart_{DEV_PATH_SIDE};
   std::string machine_version_;
   hj_bf::HJPublisher triple_ultra_pub_;
-  hj_bf::HJSubscriber restart_sub_;
+  // hj_bf::HJSubscriber restart_sub_;
+  hj_bf::HJSubscriber calibration_sub_;
   hj_bf::HJPublisher left_front_pub_;
   hj_bf::HJPublisher left_back_pub_;
   hj_bf::HJPublisher down_right_pub_;

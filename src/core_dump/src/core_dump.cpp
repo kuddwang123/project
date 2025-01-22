@@ -7,8 +7,10 @@
 
 #include "fstream"
 #include <string>
+#include <unordered_map>
 #include <boost/filesystem.hpp>
 #include "log.h"
+#include "hj_utils.h"
 HJ_REGISTER_FUNCTION(factory) {
   factory.registerCreater<core_dump_ns::CoreDump>(FUNCTION_NAME);
 }
@@ -218,8 +220,9 @@ int OperateDir::_CopyList(const std::string &srcDirPath, const std::string &desD
   return 0;
 }
 bool dumpCallback(const google_breakpad::MinidumpDescriptor &descriptor, void *context, bool succeeded) {
+  // std::cerr << RECORD_TIMESTAMP << boost::stacktrace::stacktrace() << std::endl;
   std::cerr << "Dump path: " << descriptor.path() << std::endl;
-  return succeeded;
+  // exit(0);
 }
 
 // static google_breakpad::MinidumpDescriptor descriptor(CORE_DUMP_FILE_PATH);
@@ -228,8 +231,74 @@ void crash() {
   volatile int *a = (int *)(NULL);
   *a = 1;
 }
+
+std::unordered_map<int, std::string> g_params = {std::make_pair(SIGSEGV, "SIGSEGV"), std::make_pair(SIGABRT, "SIGABRT"),
+                                                 std::make_pair(SIGBUS, "SIGBUS"), std::make_pair(SIGILL, "SIGILL"),
+                                                 std::make_pair(SIGFPE, "SIGFPE"), std::make_pair(SIGPIPE, "SIGPIPE"),};
+struct sigaction act {};
+struct sigaction segv_act {};
+struct sigaction abrt_act {};
+struct sigaction bus_act {};
+struct sigaction ill_act {};
+struct sigaction fpe_act {};
+struct sigaction pipe_act {};
+
+void handler(int signo) {
+  std::cerr << RECORD_TIMESTAMP << "CALLBACK: SIGNAL:" << signo << std::endl;
+  if (g_params.find(signo) != g_params.end()) {
+    //    guard_communication::sendCrashMessageToGuard();
+    std::cerr << RECORD_TIMESTAMP << boost::stacktrace::stacktrace() << std::endl;
+  }
+  if (signo == SIGSEGV && sigaction(signo, &segv_act, nullptr) == -1) {
+    std::cerr << "sigaction SIGSEGV error:" << std::endl;
+  }
+  if (signo == SIGABRT && sigaction(signo, &abrt_act, nullptr) == -1) {
+    std::cerr << "sigaction SIGABRT error" << std::endl;
+  }
+  if (signo == SIGBUS && sigaction(signo, &bus_act, nullptr) == -1) {
+    std::cerr << "sigaction SIGBUS error" << std::endl;
+  }
+  if (signo == SIGILL && sigaction(signo, &ill_act, nullptr) == -1) {
+    std::cerr << "sigaction SIGILL error:" << std::endl;
+  }
+  if (signo == SIGFPE && sigaction(signo, &fpe_act, nullptr) == -1) {
+    std::cerr << "sigaction SIGFPE error" << std::endl;
+  }
+  if (signo == SIGPIPE && sigaction(signo, &pipe_act, nullptr) == -1) {
+    std::cerr << "sigaction SIGPIPE error" << std::endl;
+  }
+}
+
+void registerSignal() {
+  std::cerr << "in registerMSignal" << std::endl;
+  act.sa_flags = SA_NODEFER | SA_RESETHAND;
+  act.sa_handler = &handler;
+  sigfillset(&act.sa_mask);
+
+  if (sigaction(SIGSEGV, &act, &segv_act) == -1) {
+    std::exit(EXIT_FAILURE);
+  }
+  if (sigaction(SIGABRT, &act, &abrt_act) == -1) {
+    std::exit(EXIT_FAILURE);
+  }
+  if (sigaction(SIGBUS, &act, &bus_act) == -1) {
+    std::exit(EXIT_FAILURE);
+  }
+  if (sigaction(SIGILL, &act, &ill_act) == -1) {
+    std::exit(EXIT_FAILURE);
+  }
+  if (sigaction(SIGFPE, &act, &fpe_act) == -1) {
+    std::exit(EXIT_FAILURE);
+  }
+  if (sigaction(SIGPIPE, &act, &pipe_act) == -1) {
+    std::exit(EXIT_FAILURE);
+  }
+}
+
+
 CoreDump::CoreDump(const rapidjson::Value &json_conf) : hj_bf::Function(json_conf) {
   std::string dump_file_name = CORE_DUMP_FILE_PATH;
+
   // read your config
   if (json_conf.HasMember("dump_path") && json_conf["dump_path"].IsString()) {
     dump_file_name = json_conf["dump_path"].GetString();
@@ -271,7 +340,15 @@ CoreDump::CoreDump(const rapidjson::Value &json_conf) : hj_bf::Function(json_con
   } else {
     boost::filesystem::create_directories(dump_file_name);
   }
-  hj_bf::registerSignal();
+
+  // sigset_t signal_set;
+
+  // /* block all signals */
+  // sigfillset( &signal_set );
+  // sigprocmask( SIG_BLOCK, &signal_set, NULL );
+
+  registerSignal();
+
   HJ_IMPORTANT("minos just a CoreDump");
 }
 

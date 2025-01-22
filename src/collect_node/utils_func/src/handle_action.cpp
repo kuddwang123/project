@@ -84,6 +84,13 @@ void HandleAction::ResetLogHandler(const hj_interface::CollectBroadcast &msg) {
     response_msg.ack = 0;
     response_msg.function = function_type::kLogFunc;
     pub_func_response_.publish(response_msg);
+  } else if (msg.action == hj_interface::SysAction::SYS_ACTION_SHUTDOWN ||
+              msg.action == hj_interface::SysAction::SYS_ACTION_SLEEP){
+    hj_interface::CollectBroadcast response_msg;
+    response_msg.action = msg.action;
+    response_msg.ack = 0;
+    response_msg.function = shutdown_function_type::kShoutdownLogFunc;
+    pub_func_response_.publish(response_msg);
   }
 }
 

@@ -94,8 +94,15 @@ void ApNetConfigManger::dealDataReadFromAp(const std::string& data, const std::s
 bool ApNetConfigManger::apDataParser(const std::string in, std::string& rnout, std::string& plout)
 {
     rapidjson::Document document;
+    bool base64succ = false;
+    
+    std::string base64DecodeString = base64_decode(in, base64succ, true);
+    
+    if (!base64succ) {
+        HJ_ERROR("decode fail:%s\n", in.c_str());
+        return false;
+    }
 
-    std::string base64DecodeString = base64_decode(in, true);
     std::string xorDecodeString = utils::xor_encrypt(base64DecodeString);
     std::string datakey;
     std::string datavalue;

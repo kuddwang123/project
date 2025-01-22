@@ -18,14 +18,12 @@
 #include "hjlog.h"
 #include "std_msgs/UInt8.h"
 #include "std_msgs/UInt8MultiArray.h"
-#include "hj_interface/ElecMotorCur.h"
 #include "hj_interface/TempHumidity.h"
 #include "hj_interface/Turbidity.h"
 #include "hj_interface/Bat.h"
 #include "hj_interface/PumpMotorSpeed.h"
 #include "hj_interface/FanMotorSpeed.h"
 #include "hj_interface/SensorTemp.h"
-#include "hj_interface/WirelessCharging.h"
 #ifdef HJ_T1pro
 #include "hj_interface/DustPlugDetection.h"
 #endif
@@ -47,7 +45,6 @@ class RecordMsgLasting {
 #ifdef HJ_T1pro
   void DustPlugCallback(const hj_interface::DustPlugDetection::ConstPtr&);
 #endif
-  void MotorCurCallback(const hj_interface::ElecMotorCur::ConstPtr&);
   void TurbidityCallback(const hj_interface::Turbidity::ConstPtr&);
   void TempHumidityCallback(const hj_interface::TempHumidity::ConstPtr&);
   void BatCallback(const hj_interface::Bat::ConstPtr&);
@@ -55,23 +52,19 @@ class RecordMsgLasting {
   void FanMotorSpeedCallback(const hj_interface::FanMotorSpeed::ConstPtr&);
   void OutWaterCallback(const std_msgs::UInt8MultiArray::ConstPtr&);
   void SensorsTempCallback(const hj_interface::SensorTemp::ConstPtr&);
-  void WirelessChargingCallback(const hj_interface::WirelessCharging::ConstPtr&);
   void TurnMotorHallCallback(const std_msgs::UInt8::ConstPtr&);
  private:
   void* bat_logger_{nullptr};
   void* out_water_logger_{nullptr};
-  void* motor_cur_logger_{nullptr};
   void* tur_logger_{nullptr};
   void* temp_humidity_logger_{nullptr};
   void* pump_motor_speed_logger_{nullptr};
   void* fan_motor_speed_logger_{nullptr};
   void* sen_temp_logger_{nullptr};
-  void* wireless_charging_logger_{nullptr};
   void* turn_motor_hall_logger_{nullptr};
 #ifdef HJ_T1pro
   void* dust_plug_logger_{nullptr};
 #endif
-  hj_bf::HJSubscriber sub_motor_cur_;
   hj_bf::HJSubscriber sub_tur_;
   hj_bf::HJSubscriber sub_temp_humidity_;
   hj_bf::HJSubscriber sub_bat_;
@@ -79,7 +72,6 @@ class RecordMsgLasting {
   hj_bf::HJSubscriber sub_fan_motor_speed_;
   hj_bf::HJSubscriber sub_out_water_;
   hj_bf::HJSubscriber sub_sen_temp_;
-  hj_bf::HJSubscriber sub_wireless_charging_;
   hj_bf::HJSubscriber sub_turn_motor_hall_;
 #ifdef HJ_T1pro
   hj_bf::HJSubscriber sub_dust_plug_;

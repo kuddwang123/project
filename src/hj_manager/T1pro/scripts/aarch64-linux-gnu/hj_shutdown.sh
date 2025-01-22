@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PID=`ps -ef | grep -E "keep_progress.sh|middleware_node|planning_node|collect_node|slam_node|utils_node|log_recorder|rosctl_ser|httpsrv" | grep -v grep | awk '{print $1}'`
+PID=`ps -ef | grep -E "keep_progress.sh|middleware_node|planning_node|collect_node|slam_node|utils_node|log_recorder|Ota" | grep -v grep | awk '{print $1}'`
 for item  in $PID
 do
 	kill -s 9 $item

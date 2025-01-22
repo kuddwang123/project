@@ -14,6 +14,7 @@ public:
     bool dowork(const boost::any& para) override;
     std::string getCutMsg() const {return unPackMsg_;}
     static const char* cutResultFile_;
+    std::string getUnPackFailMsg() const {return unPackFailMsg_;}
 
 private:
     int timeout_;
@@ -23,6 +24,7 @@ private:
     std::condition_variable cond_;
     std::mutex mtx_;
     std::string unPackMsg_;
+    std::string unPackFailMsg_;
     int progressCnt_;
 
 private:

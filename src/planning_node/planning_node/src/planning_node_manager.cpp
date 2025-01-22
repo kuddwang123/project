@@ -35,7 +35,8 @@ int main(int argc, char** argv) {
   std::shared_ptr<hj_bf::NodeConfig> node_config = std::make_shared<hj_bf::NodeConfig>();
   node_config->node_name = NODE_NAME;
   node_config->log_config_path = LOG_CONFIG_PATH;
-
+  node_config->log_level = LOG_LEVEL;
+  std::cout << "LOG_LEVEL: " << LOG_LEVEL << std::endl;
   // std::vector<unsigned char> crypt_val(CRYPT_VAL, CRYPT_VAL + strlen(CRYPT_VAL));
   std::string crypt_val = CRYPT_VAL;
   // std::cout << "CRYPT_VAL: " << crypt_val << std::endl;
@@ -47,11 +48,13 @@ int main(int argc, char** argv) {
     temp_config_path =
         temp_config_path + "/" + NODE_NAME + "/" + NODE_NAME + "/config" + "/" + PROJECT_NUMBER + "/amd64/config.json";
     hj_bf::readConfigure(temp_config_path, node_config);
+    hj_bf::readRemoteConfigure(node_config, true, node_config->remote_config_path);
   }
 #endif
 #ifdef HJ_AARCH64
   temp_config_path = temp_config_path + "/" + NODE_NAME + "/config.json";
   hj_bf::readConfigure(temp_config_path, node_config);
+  hj_bf::readRemoteConfigure(node_config, true, node_config->remote_config_path);
 #endif
   uint32_t temp_ops = 0;
   if (node_config->all_log_close == true) {
@@ -61,6 +64,7 @@ int main(int argc, char** argv) {
   hj_bf::nodeInit(argc, argv, node_config->node_name, node_config, temp_ops);
   if (node_config->node_log_close == false) {
     hj_bf::logInit(node_config->log_config_path, node_config->crypt_val);
+    hj_bf::logLevelSetRos(node_config->log_level);
   } else {
     std::cout << "close log, node name:" << node_config->node_name << std::endl;
   }

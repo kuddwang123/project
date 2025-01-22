@@ -28,6 +28,10 @@ AppCommunication::AppCommunication(const rapidjson::Value& json_conf)
     port_(8888),
     inWater_(255)
 {
+    if (json_conf.HasMember("tcpPort") && json_conf["tcpPort"].IsInt()) {
+        port_ = json_conf["tcpPort"].GetInt();
+    }
+
     std::thread ([&]() {
         appDataRouterPtr_ = std::make_shared<AppDataRouter>(certdir_+certfile_);
         assert(appDataRouterPtr_);
@@ -49,10 +53,6 @@ AppCommunication::AppCommunication(const rapidjson::Value& json_conf)
         }
         
         certfilename_ = certdir_ + certfile_;
-
-        if (json_conf.HasMember("tcpPort") && json_conf["tcpPort"].IsInt()) {
-            port_ = json_conf["tcpPort"].GetInt();
-        }
 
         initialize();
 
@@ -89,8 +89,11 @@ void AppCommunication::initialize()
 
     toMidPub_ = hj_bf::HJAdvertise<std_msgs::String>("/to_middle", 10);
 
+    otaPub_ = hj_bf::HJAdvertise<hj_interface::AppMsg>("aiper_ota_trigger", 1);
+
     inwaterSub_ = hj_bf::HJSubscribe("/water_inspection", 1, &AppCommunication::inWaterCb, this);
 
+    cmdProcessPub_ = hj_bf::HJAdvertise<hj_interface::AppData>("/cmd_process", 5);
     initIot();
 }
 
@@ -340,6 +343,9 @@ bool AppCommunication::appDataHandler(const hj_interface::AppMsg& appmsg)
             pub.data = msg.payload;
             s3urlPub_.publish(pub);
             dealtcnt++;
+        } else if (msg.key == "UrlOta") {
+            otaPub_.publish(appmsg);
+            dealtcnt++;
         } else if (msg.key == "FactoryRestore") {
             HJ_INFO("FactoryRestore receive!\n");
             pubAppUnbindToMid();
@@ -360,6 +366,9 @@ bool AppCommunication::appDataHandler(const hj_interface::AppMsg& appmsg)
             if (msg.key == "PullDeviceLog") {
                 dealtcnt++;
             }
+        } else if (msg.key == "switchLog") {
+            HJ_INFO("%s receive!\n", msg.key.c_str());
+            cmdProcessPub_.publish(msg);
         }
     }
 

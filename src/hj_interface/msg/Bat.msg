@@ -8,3 +8,4 @@ uint16  ch_vol             #电池充电电压mV
 int16   charger_ch_cur     #充电端充电电流mA
 uint16  bat_cycle_times    #电池循环次数
 uint8   bat_health_left    #电池健康剩余容量
+uint8   disable_charge     #是否禁止充电

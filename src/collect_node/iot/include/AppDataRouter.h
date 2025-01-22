@@ -49,7 +49,7 @@ public:
     bool constructAwsMqttConn(const std::string& thing);
 
   //Aws Iot重连
-    bool restartIot();
+    bool restartIot(bool flag = false);
 
   //注册蓝牙数据处理
     void setAppDataAnalyser(const appDataAnalyseCb cb) { appDataAnalyseCb_ = cb; }
@@ -99,6 +99,8 @@ private:
     void updateShadowOnline();
 
     void updateShadowOffline();
+
+    void cloudNotifyOffline();
 
     void dealSessionFunc(bool sessionPresent);
 

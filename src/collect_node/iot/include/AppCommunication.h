@@ -38,6 +38,8 @@ class AppCommunication : public hj_bf::Function {
     hj_bf::HJPublisher timePub_;
     hj_bf::HJPublisher getLogPub_;
     hj_bf::HJPublisher toMidPub_;
+    hj_bf::HJPublisher otaPub_;
+    hj_bf::HJPublisher cmdProcessPub_;
     std::string certdir_;
     std::string certfile_;
     std::string certfilename_;

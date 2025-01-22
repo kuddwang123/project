@@ -21,6 +21,7 @@ bool Unpack::dowork(const boost::any& para)
     otaRptFunc_(2, 50, "", 0);
     progressCnt_ = 0;
     status_ = WORKING;
+    unPackFailMsg_.empty();
     HJ_CST_TIME_DEBUG(ota_logger, "pub unpack!\n");
     std_msgs::String msg;
     unPackPub_.publish(msg);
@@ -32,6 +33,7 @@ bool Unpack::dowork(const boost::any& para)
         HJ_CST_TIME_DEBUG(ota_logger, "unpack timeout!\n");
         status_ = END;
         progressTmr_.stop();
+        unPackFailMsg_ = "unpack timeout";
         return false;
     }
 
@@ -41,6 +43,7 @@ bool Unpack::dowork(const boost::any& para)
         HJ_CST_TIME_ERROR(ota_logger, "open cut file fail\n");
         status_ = END;
         progressTmr_.stop();
+        unPackFailMsg_ = "open cut file fail";
         return false;
     }    
 
@@ -53,17 +56,20 @@ bool Unpack::dowork(const boost::any& para)
         std::string version = std::string("V")+js["fw_ver"].get<std::string>();
         if (code != 0) {
             progressTmr_.stop();
+            unPackFailMsg_ = std::to_string(code);
             return false;
         }
 
         if (version != nextver) {
             HJ_CST_TIME_ERROR(ota_logger, "version not match: %s %s\n", nextver.c_str(), version.c_str());
             progressTmr_.stop();
+            unPackFailMsg_ = "cut version not match";
             return false;
         }
     } catch (const std::exception& e) {
         HJ_CST_TIME_ERROR(ota_logger, "json parse fail\n");
         progressTmr_.stop();
+        unPackFailMsg_ = "cut json parse fail";
         return false;
     }
 

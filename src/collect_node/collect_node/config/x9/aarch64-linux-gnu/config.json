@@ -5,6 +5,7 @@
   "node_log_close":false,
   "node_name":"collect_node",
   "node_threads":4,
+  "remote_config_path":"/userdata/hj/config",
   "functions": [
       {
         "ID": "core_dump",
@@ -50,7 +51,7 @@
         "ID": "mcu",
         "name": "mcu",
         "enable_keylog":1,
-        "machine_version": "P4",
+        "standby_mode": 0,
         "mcu_para":{
           "port":"/dev/ttyS0",
           "baudRate":500000,
@@ -99,6 +100,23 @@
         "name": "posttunnel",
         "queueSize":100,
         "loadFailSec":60
+      },
+      {
+        "ID":"feature_preview",
+        "name":"feature_preview",
+        "back_forward" : {
+	   "speed":150,
+           "move":13,
+           "stay":5,
+	   "pump":25
+	},
+        "pump_preview" : {
+           "highl":40,
+           "highr":40,
+           "lowl":25,
+           "lowr":25,
+           "stay":5
+        }
       }
   ]
 }

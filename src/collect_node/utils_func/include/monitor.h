@@ -9,6 +9,7 @@
 #include "function_factory.h"
 #include "node_factory.h"
 #include "std_msgs/UInt8.h"
+#include "std_msgs/String.h"
 #include <mutex>
 #include <condition_variable>
 
@@ -43,20 +44,25 @@ class Monitor {
   int32_t GetMemoryUsage(int pid);
   int32_t GetAllMemory();
   pid_t GetProcessPidByName(const std::string& proc_name);
-  void TaskCallBack(const std_msgs::UInt8::ConstPtr& msg);
+  // void TaskCallBack(const std_msgs::UInt8::ConstPtr& msg);
+  void TaskNameCallBack(const std_msgs::String::ConstPtr& msg);
   void CalCpuMemeory();
-  void UploadCoredump(const hj_bf::HJTimerEvent &);
+  void UploadCoredump();
+  void pubBootType(bool is_core_dump);
  private:
-  std::atomic<uint8_t> task_{0};
+  std::mutex mtx_;
+  // std::atomic<uint8_t> task_{0};
+  std::string task_name_;
   int32_t collect_node_pid_{-1};
   int32_t slam_node_pid_{-1};
   int32_t planning_node_pid_{-1};
   int32_t middleware_node_pid_{-1};
   int32_t utils_node_pid_{-1};
-  hj_bf::HJSubscriber task_sub_;
-  std::condition_variable cv_;
+  // hj_bf::HJSubscriber task_sub_;
+  hj_bf::HJSubscriber task_name_sub_;
+  // std::condition_variable cv_;
   std::string fw_version_{"1.0.0"};
-  hj_bf::HJTimer coredump_upload_timer_;
+  hj_bf::HJPublisher bootType_pub_;
 };
 }  // namespace collect_node_utils_func
 

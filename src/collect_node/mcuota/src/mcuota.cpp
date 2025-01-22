@@ -69,12 +69,15 @@ void State::setMcuOtaId(uint8_t id)
     } else if (mcuid_ == MCU_LAMP_BOARD) {
         sendDataToMcuId_ = 0x704;
         dataFromMcuId_ = 0x705;
+    } else if (mcuid_ == MCU_ANGO_BOARD) {
+        sendDataToMcuId_ = 0x706;
+        dataFromMcuId_ = 0x707;
     }
 }
 
 StartOta::StartOta(int fd, UartOtaDataHandler* uartHandler):
     State(fd, 5, uartHandler) {
-    writeTmr_ = hj_bf::HJCreateTimer("startota", 100 * 1000, &StartOta::writeUartTmrCb, this, false);
+    writeTmr_ = hj_bf::HJCreateTimer("startota", 500 * 1000, &StartOta::writeUartTmrCb, this, false);
 }
 
 bool StartOta::handle()
@@ -141,8 +144,8 @@ void StartOta::writeUartTmrCb(const hj_bf::HJTimerEvent&) {
 }
 
 FirmwareInfo::FirmwareInfo(int fd, UartOtaDataHandler* uartHandler):
-    verCount_(3), State(fd, 5, uartHandler) {
-    writeTmr_ = hj_bf::HJCreateTimer("writeFirmHead", 100 * 1000, &FirmwareInfo::writeFirmTmrCb, this, false);
+    verCount_(3), State(fd, 10, uartHandler) {
+    writeTmr_ = hj_bf::HJCreateTimer("writeFirmHead", 50 * 1000, &FirmwareInfo::writeFirmTmrCb, this, false);
 }
 
 void FirmwareInfo::init(uint32_t size, const std::string& ver) {
@@ -162,6 +165,7 @@ bool FirmwareInfo::handle() {
     timeout.tv_usec = 0;
     uint8_t buf[MAX_PACKAGE_SIZE] = {0};
     uint32_t id = 0;
+    bool enterNext = false;
 
     if (!parseVer(ver_)) {
         STATERET(false, "version invalid");
@@ -185,16 +189,20 @@ bool FirmwareInfo::handle() {
         }
 
         id = *(uint32_t*)buf;
-        if (id != dataFromMcuId_)
+        if (id != dataFromMcuId_) {
+            HJ_INFO("id = %04x", id);
             continue;
+        }
         else {
             uint8_t cmd = *(buf+4);
             if (cmd != MCU_REQ_FIRMINFO_CMD) {
                 if (cmd == MCU_REQ_BINDATA_CMD) {
                     HJ_INFO("write firm head done\n");
                     HJ_INFO("send bin cmd income\n");
+                    enterNext = true;
                     break;
                 } else {
+                    HJ_INFO("cmd=%02x", cmd);
                     continue;
                 }
             }
@@ -211,37 +219,12 @@ bool FirmwareInfo::handle() {
         }        
     }
 
-    //HJ_INFO("****mcu req fieminfo pass****\n");
-
-/*
-    static uint8_t firmhead[] = {0x00, 0x00, 0x00, 0x00, 
-                                 SOC_SEND_FIRMINFO_CMD, 0x00, 0x00,
-                                 0xff, 0xff, 0xff, 0xff,             //size
-                                 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, //ver 
-                                 0x0B, 0x00,
-                                 0xff, 0xff, 0xff};
-
-    UINT32_TO_BUF_LITTLE(sendDataToMcuId_, firmhead);
-    uint16_t vernum[3] = {0};
-    if (!parseVer(ver_, vernum)) {
-        STATERET(false, "version invalid");
+    if (enterNext) {
+        STATERET(true, "ok");
+    } else {
+        HJ_ERROR("firmware request timeout\n");
+        STATERET(false, "firmware request timeout");
     }
-
-    for (int i = 0; i < 3; ++i) {
-       HJ_INFO("vernum[%d]=%d\n", i, vernum[i]);
-    }
-
-    UINT32_TO_BUF_LITTLE(size_, firmhead+7);
-    UINT16_TO_BUF_LITTLE(vernum[0], firmhead+11);
-    UINT16_TO_BUF_LITTLE(vernum[1], firmhead+13);
-    UINT16_TO_BUF_LITTLE(vernum[2], firmhead+15);
-    
-    HJ_INFO("bin size=%d\n", size_);
-
-    uartHandler_ -> writePackage2Uart(firmhead, sizeof(firmhead)/sizeof(uint8_t));
-*/
-    
-    STATERET(true, "ok");
 }
 
 void FirmwareInfo::writeFirmTmrCb(const hj_bf::HJTimerEvent&) {
@@ -279,7 +262,7 @@ bool FirmwareInfo::parseVer(const std::string& ver) {
 }
 
 SendBin::SendBin(int fd, UartOtaDataHandler* uartHandler):
-    State(fd, 120, uartHandler) {
+    State(fd, 175, uartHandler) {
     writeTmr_ = hj_bf::HJCreateTimer("sendBin", 100 * 1000, &SendBin::sendBinTmrCb, this, false);
 }
 
@@ -508,7 +491,8 @@ bool UartOtaDataHandler::analyzePackage() {
         //HJ_DEBUG(">>>>recv from uart, id=%d\n", id);
         if(id == OTA_ACK_ID || 
            id == OTA_MCU_DATA_ID ||
-           id == OTA_LAMP_DATA_ID) {
+           id == OTA_LAMP_DATA_ID ||
+           id == OTA_ANGO_DATA_ID) {
             write(writefd_, m_pRxBuf, rxPackageDataCount_+1);
         }
 
@@ -586,8 +570,10 @@ bool McuOtaRun::init(uint8_t type, const std::string& vernum, const std::string&
 
     if (otaType_ == MCU) {
         mcuId_ = MCU_MAIN_BOARD;
-    } else if (otaType_ = LAMPBOARD) {
+    } else if (otaType_ == LAMPBOARD) {
         mcuId_ = MCU_LAMP_BOARD;
+    } else if (otaType_ == ANGO) {
+        mcuId_ = MCU_ANGO_BOARD;
     } else {
         HJ_ERROR("unsurpport type:%d\n", type);
         return false;
@@ -759,7 +745,7 @@ McuOta::McuOta(const rapidjson::Value& json_conf):
     
     if (json_conf.HasMember("log") && json_conf["log"].IsString()) {
         std::string file = json_conf["log"].GetString();
-        logger = hj_cst_log_add(file.data(), INFO_LOG, 20*1024*1024, 2);
+        logger = hj_cst_log_add(file.data(), INFO_LOG, 100*1024, 3);
     }
 
     if (json_conf.HasMember("mcu_para") && json_conf["mcu_para"].IsObject()) {
@@ -810,7 +796,7 @@ void McuOta::mcuOtaCtlCallback(const hj_interface::OtaUpgradeData::ConstPtr& msg
     }
 
     if (msg->todo == "UpdateOTA") {
-        if (msg->module != MCU && msg->module != LAMPBOARD) {
+        if (msg->module != MCU && msg->module != LAMPBOARD && msg->module != ANGO) {
             HJ_INFO("ignore module:%d\n", msg->module);
             return;
         }
@@ -842,11 +828,11 @@ void McuOta::mcuOtaCtlCallback(const hj_interface::OtaUpgradeData::ConstPtr& msg
         return;
     }
 
-    /*notify mcu to stop uart read and trigger timer*/
+    /*trigger timer and notify mcu to stop uart read*/
+    mcuOtaReadyTmr_.start();
     std_msgs::Bool notify;
     notify.data = false;
     mcuctl_pub_.publish(notify);
-    mcuOtaReadyTmr_.start();
     return;
 }
 

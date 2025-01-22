@@ -1,5 +1,10 @@
+#include <ros/console.h>
+
 #include "test_function.h"
+#include "hj_utils.h"
+#include "hj_zip.h"
 #include "log.h"
+#include "guard_communication.h"
 #include <unistd.h>
 
 #include "collect_node/TwoInts.h"
@@ -16,6 +21,17 @@
 #include <functional>
 #include "shm_interface.h"
 #include <hj_interface/BigdataUpload.h>
+#include <hj_interface/AppData.h>
+// #include <nnxx/socket.h>
+// #include <nnxx/message.h>
+// #include <nnxx/pair.h>
+// #include <nnxx/pipeline.h>
+
+#include "log4cxx/appenderskeleton.h"
+#include "log4cxx/logger.h"
+#include "log4cxx/propertyconfigurator.h"
+#include "log4cxx/spi/loggingevent.h"
+
 // #include "test_load_so.h"
 HJ_REGISTER_FUNCTION(factory) {
   std::cerr << "minos register factory" <<FUNCTION_NAME<< std::endl;
@@ -23,6 +39,37 @@ HJ_REGISTER_FUNCTION(factory) {
 }
 
 namespace test_load_so {
+
+// int AvaExec(const std::string &cmd) {
+//     static std::mutex mtx;
+//     mtx.lock();
+//     static nnxx::socket sock_;
+//     static bool init = false;
+//     if (init == false) {
+//         sock_ = nnxx::socket(nnxx::SP, nnxx::PUSH);
+//         if (sock_ < 0) {
+//             perror("[AvaExec]Create Socket Fail: ");
+//             std::cerr << "[AvaExec]fail to init socket: " << cmd << ", sock_: " << sock_ << std::endl;
+//             return -1;
+//         }
+//         init = true;
+//         sock_.connect("ipc:///tmp/guard_m.socket");
+//         std::cerr<<"create sock"<<std::endl;
+//     }
+//     std::string str = cmd;
+//     int ret = sock_.send(str);
+//     std::cerr<<"sock_.send success"<<std::endl;
+//     mtx.unlock();
+//     if (ret <= 0) {
+//         perror("[AvaExec]Send Socket Fail: ");
+//         std::cerr << "[AvaExec]fail to send: " << cmd << ", ret: " << ret << std::endl;
+//         ret = -1;
+//     } else {
+//         ret = 0;
+//     }
+//     return ret;
+// }
+
 int so_func() {
   static int i = 0;
   i++;
@@ -156,9 +203,9 @@ void TestLoadSo::callback1(const hj_bf::HJTimerEvent &)
   //   HJ_INFO("Callback size1:%d",sizeof(int));
   //   HJ_INFO("Callback size1:%d",sizeof(hj_bf::VariableImpl));
 
-  // std_msgs::Int32 temp2;
-  // temp2.data = 32;
-  // test_pub_.publish(temp2);
+  std_msgs::Int32 temp2;
+  temp2.data = 32;
+  test_pub_.publish(temp2);
 
   // std_msgs::String temp_msg;
   // temp_msg.data = "test pub";
@@ -185,7 +232,9 @@ void TestLoadSo::callback1(const hj_bf::HJTimerEvent &)
   HJ_WARN("HJ_WARN :");
   HJ_ERROR("HJ_ERROR :");
   HJ_EFATAL("HJ_EFATAL :");
-
+  static int i = 0;
+  i ++;
+  std::cerr<<"minos test"<< i<<std::endl;
   // collect_node::TwoInts srv;
   // static int i = 0;
   // i ++;
@@ -204,6 +253,76 @@ void TestLoadSo::callback1(const hj_bf::HJTimerEvent &)
   // }else{
   //   HJ_ERROR("switch_cstr =%s",switch_cstr);
   // }
+
+
+
+  // ros::Duration temp2 = ros::Duration(0.05); 
+  // auto current = ros::Time::now();
+
+  // std::time_t timeStamp = static_cast<std::time_t>(current.sec);
+  // std::tm* localTime = std::localtime(&timeStamp);
+  // char buffer_c[80];
+  // std::strftime(buffer_c, sizeof(buffer_c), "%Y-%m-%d %H:%M:%S",
+  //               localTime);
+  // std::cerr << "get a time jump from "  << " to " << buffer_c << "."
+  //           << current.nsec << std::endl;
+
+  // ros::Time  temp = current + temp2;
+  // timeStamp = static_cast<std::time_t>(temp.sec);
+  // localTime = std::localtime(&timeStamp);
+  
+  // char buffer_d[80];
+  // std::strftime(buffer_d, sizeof(buffer_d), "%Y-%m-%d %H:%M:%S",
+  //               localTime);
+  // std::cerr << "get a time jump2 from "  << " to " << buffer_d << "."
+  //           << temp.nsec << std::endl;
+  // std::cerr << "duration " << temp2.toSec() << std::endl;
+
+
+  // std::string str = "test_string: ";
+  // static int i = 1;
+  // i++;
+  // str += std::to_string(i);
+  // if(AvaExec(str) == 0){
+  //   std::cerr<<"sucess AvaExec"<<std::endl;
+  // } else{
+  //   std::cerr<<"fail AvaExec"<<std::endl;
+  // }
+
+  // static int num1 = 0; 
+  // if(num1 == 10){
+  //   crash();
+  // }
+  // num1++;
+  // std::cerr << RECORD_TIMESTAMP << ": test getTimeNowStr"<< std::endl;
+  // static char buf[256];
+  // static int size = sizeof(buf);
+  // std::cerr << RECORD_TIMESTAMP << size << std::endl;
+  
+  // static u_int32_t test_num = 10;
+  // test_num++;
+  // if(test_num%20 == 0){
+  //   HJ_EFATAL("HJ_EFATAL1 :%d",test_num);
+  //   std::string test_json = R"({
+  //         "logVersion": "release"
+  //       })";
+  //   hj_interface::AppData temp_data;
+  //   temp_data.key = "switchLog";
+  //   temp_data.payload = test_json;
+  //   // test_pub2_.publish(temp_data);
+  // }
+
+  // std::cerr<<"minos22: "<<logger->getLevel()->toString()<<std::endl;
+      // kill(getpid(), SIGSEGV);
+  // crash();
+  // abort();
+    std::cerr << "trigger sigill: "  << SIGBUS<<std::endl; // 这一行不会被执行
+    // void (*invalid_func)() = (void (*)())0x1; // 无效地址
+    // invalid_func(); // 试图执行无效指令
+
+    // 插入非法指令
+    // raise(SIGILL);
+    std::cerr << "trigger2 sigill: "  << std::endl; // 这一行不会被执行
 }
 void TestLoadSo::callback1_for_steady(const hj_bf::HJSteadyTimerEvent &)
 {
@@ -216,6 +335,19 @@ void TestLoadSo::callback1_for_steady(const hj_bf::HJSteadyTimerEvent &)
     ROS_INFO("callback1_for_steady Sum: %ld", (long int)srv.response.sum);
   } else {
     ROS_ERROR("Failed to call service callback1_for_steady");
+  }
+
+
+  static u_int32_t test_num = 0;
+  test_num++;
+  if(test_num%20 == 0){
+    std::string test_json = R"({
+          "switchLog": "off"
+        })";
+    hj_interface::AppData temp_data;
+    temp_data.key = "switch_log";
+    temp_data.payload = test_json;
+    // test_pub2_.publish(temp_data);
   }
 }
 void TestLoadSo::callbackNormal()
@@ -296,6 +428,10 @@ int TestLoadSo::loopPrint() {
     } else {
       ROS_ERROR("Failed to call service loopPrint");
     }
+    HJ_ERROR("minos HJ_ERROR 1:");
+    crash();
+    HJ_ERROR("minos HJ_ERROR 2:");
+    // raise(SIGILL);
   }
 }
 
@@ -314,6 +450,7 @@ int TestLoadSo::loopPrint() {
 //     }
 //   }
 // }
+
 
 TestLoadSo::TestLoadSo(const rapidjson::Value& json_conf) : hj_bf::Function(json_conf) {
   //read config
@@ -340,14 +477,14 @@ TestLoadSo::TestLoadSo(const rapidjson::Value& json_conf) : hj_bf::Function(json
   //your code
   TestClassFun test_class_fun;//for test fun in class
   test_pub_ = hj_bf::HJAdvertise<std_msgs::Int32>("collect_test333", 1000);
-  test_pub2_ = hj_bf::HJAdvertise<std_msgs::String>("collect_test3", 1000);
+  test_pub2_ = hj_bf::HJAdvertise<hj_interface::AppData>("/cmd_process", 1000);
   bigdata_pub_ = hj_bf::HJAdvertise<hj_interface::BigdataUpload>(big_data::kBigdataCmdTopicName, 1000);
 //  HJ_INFO("getNumPublisher:%d", hj_bf::getNumPublisher("collect_test3"));
 //  HJ_INFO("getNuAllPublisher:%d", hj_bf::getAllPublisher());
   boost::function<void(const std_msgs::String::ConstPtr&)> func_callback(chatterCallback, boost::placeholders::_1);
 //  hj_bf::HJSubscriber sub = hj_bf::HJSubscribe("/collect_test2", 1000, &TestClassFun::chatterCallback, &test_class_fun);
    test_sub_ = hj_bf::HJSubscribe("collect_test2", 1000, func_callback);
-//  test_sub2_ = hj_bf::HJSubscribe("collect_test", 1000, &TestLoadSo::chatterCallbacktt, this);
+  //  test_sub2_ = hj_bf::HJSubscribe("collect_test", 1000, &TestLoadSo::chatterCallbacktt, this);
 //  test_sub2_ = hj_bf::HJSubscribe("collect_test", 1000, [](const std_msgs::String::ConstPtr& msg){ROS_INFO("minos here in 2222222");});
 //  hj_bf::getHandle().subscribe<std_msgs::String>("collect_test", 1000, [](const std_msgs::String::ConstPtr& msg){ROS_INFO("minos here in 2222222");});
 
@@ -355,8 +492,10 @@ TestLoadSo::TestLoadSo(const rapidjson::Value& json_conf) : hj_bf::Function(json
 //  hj_bf::HJServer service2 = service;
 //test timer
 //  temp_ = hj_bf::temp_test;
+    ROS_INFO("minos send signal:%d",getpid());
 
-
+    //  crash();
+    ROS_INFO("minos send signal2");
 //  static std::shared_ptr<ros::Timer> temp_timer2 =  std::make_shared<ros::Timer>(hj_bf::getHandle().createTimer(ros::Duration(10), &TestLoadSo::callback1, this));
 //  static std::weak_ptr<ros::Timer> temp_timer;
 //  temp_timer = temp_timer2;
@@ -364,8 +503,8 @@ TestLoadSo::TestLoadSo(const rapidjson::Value& json_conf) : hj_bf::Function(json
 //  std::cerr << "minos TestLoadSo:" << temp_timer2.use_count() << std::endl;
     int num = 0;
   //  hj_bf::createVariable("minos_test1", num);
-   timer1 = hj_bf::HJCreateTimer("timer1",  1000 * 1000, &TestLoadSo::callback1, this);
-   steadytimer1 = hj_bf::HJCreateSteadyTimer("steadytimer1",  1000 * 1000, &TestLoadSo::callback1_for_steady, this);
+   timer1 = hj_bf::HJCreateTimer("timer1",  2* 1000 * 1000, &TestLoadSo::callback1, this);
+  //  steadytimer1 = hj_bf::HJCreateSteadyTimer("steadytimer1",  1000 * 1000, &TestLoadSo::callback1_for_steady, this);
 
    client1 = hj_bf::HJCreateClient<collect_node::TwoInts>("client1_test");
    client2 = hj_bf::HJCreateClient<collect_node::TwoInts>("client2_test");
@@ -377,8 +516,8 @@ TestLoadSo::TestLoadSo(const rapidjson::Value& json_conf) : hj_bf::Function(json
   // timer2 = hj_bf::HJCreateTimer("timer2", 2 * 1000 * 1000, &TestLoadSo::callback2, this);
   // timer3 = hj_bf::HJCreateTimer("timer3", 2 * 1000* 1000, callback3);
 //  timer3.stop();
-//  auto state = std::thread(&TestLoadSo::loopPrint,this);  // 开线程
-//   state.detach();
+    auto state = std::thread(&TestLoadSo::loopPrint,this);  // 开线程
+      state.detach();
 //  auto state1 = std::thread(&TestLoadSo::loopPrint,this);  // 开线程
 //   state1.detach();
 //  auto state2 = std::thread(&TestLoadSo::loopPrint,this);  // 开线程
@@ -387,20 +526,44 @@ TestLoadSo::TestLoadSo(const rapidjson::Value& json_conf) : hj_bf::Function(json
 //   state3.detach();
 //  auto state4 = std::thread(&TestLoadSo::loopPrint,this);  // 开线程
 //   state4.detach();
-    char *heap_buf = (char*)malloc(32*sizeof(char));
-    memcpy(heap_buf+30, "overflow", 8);    //在heap_buf的第30个字节开始，拷贝8个字符
+    std::string line = R"({"node": "planning_node","timestamp":1734057341.299,"restart_count":1})";
+     rapidjson::Document document;
+    if (!document.Parse(line.data()).HasParseError()) {
+      std::string node_name = "";
+      uint64_t time_ms = 0;
+      if (document.HasMember("node") && document["node"].IsString()) {
+        node_name = document["node"].GetString();
+      }
+      double timestamp_ms;
+      if (document.HasMember("timestamp") && document["timestamp"].IsFloat()) {
+        timestamp_ms = document["timestamp"].GetDouble();
+        time_ms = static_cast<uint64_t>(timestamp_ms * 1000);
+      }
 
-    free(heap_buf);
+      HJ_INFO("minos up: time_ms: %ld, timestamp_ms %f, ",time_ms, timestamp_ms);
+    }
+
 }
 
-  void TestLoadSo::chatterCallbacktt(const std_msgs::String& msg) { 
-    ROS_INFO("I heard: [%s] in class 10", msg.data.c_str()); 
-    // sleep(1);
-    // ROS_INFO("I heard: [%s] in class 11", msg.data.c_str());
-    // sleep(1);
-    // ROS_INFO("I heard: [%s] in class 12", msg.data.c_str());
-    // sleep(1);
-    }
+void TestLoadSo::chatterCallbacktt(const std_msgs::String& msg) {
+  ROS_INFO("I heard: [%s] in class 10", msg.data.c_str());
+  std::string switch_ = "on";
+  std::string test_json;
+  if (switch_ == msg.data.c_str()) {
+    test_json = R"({
+            "logVersion": "debug"
+          })";
+  } else {
+    test_json = R"({
+            "logVersion": "release"
+          })";
+  }
+
+  hj_interface::AppData temp_data;
+  temp_data.key = "switchLog";
+  temp_data.payload = test_json;
+  test_pub2_.publish(temp_data);
+}
     void TestLoadSo::chatterCallbacktt2(const std_msgs::String::ConstPtr&  msg) { 
       ROS_INFO("I heard: [%s] in class 10", msg->data.c_str()); 
       sleep(1);

@@ -34,13 +34,6 @@ bool RecordMsgLasting::initizlize(const std::string& file, uint8_t size) {
     return false;
   }
 
-  std::string motor_cur_log_path = file + "/motor_cur.log";
-  motor_cur_logger_ = hj_cst_log_add(motor_cur_log_path.data(), INFO_LOG, size*1024*1024, 2);
-  if (motor_cur_logger_ == nullptr) {
-    HJ_ERROR("Failed to create motor_cur logger.");
-    return false;
-  }
-
   std::string tur_log_path = file + "/turbidity.log";
   tur_logger_ = hj_cst_log_add(tur_log_path.data(), INFO_LOG, size*1024*1024, 2);
   if (tur_logger_ == nullptr) {
@@ -83,13 +76,6 @@ bool RecordMsgLasting::initizlize(const std::string& file, uint8_t size) {
     return false;
   }
 
-  std::string wireless_charging_log_path = file + "/wireless_charging.log";
-  wireless_charging_logger_ = hj_cst_log_add(wireless_charging_log_path.data(), INFO_LOG, size*1024*1024, 2);
-  if (wireless_charging_logger_ == nullptr) {
-    HJ_ERROR("Failed to create wireless_charging_logger_ logger.");
-    return false;
-  }
-
 #ifdef HJ_T1pro
   std::string dust_plug_log_path = file + "/dust_plug.log";
   dust_plug_logger_ = hj_cst_log_add(dust_plug_log_path.data(), INFO_LOG, size*1024*1024, 2);
@@ -99,7 +85,6 @@ bool RecordMsgLasting::initizlize(const std::string& file, uint8_t size) {
   }
 #endif
 
-  sub_motor_cur_ = hj_bf::HJSubscribe("motor_cur", 10, &RecordMsgLasting::MotorCurCallback, this);
   sub_tur_ = hj_bf::HJSubscribe("turbidity_data", 10, &RecordMsgLasting::TurbidityCallback, this);
   sub_temp_humidity_ = hj_bf::HJSubscribe("tempHumidity_chatter", 10,
                                             &RecordMsgLasting::TempHumidityCallback, this);
@@ -111,7 +96,6 @@ bool RecordMsgLasting::initizlize(const std::string& file, uint8_t size) {
   sub_out_water_ = hj_bf::HJSubscribe("outwater_hall", 10, &RecordMsgLasting::OutWaterCallback, this);
   sub_sen_temp_ = hj_bf::HJSubscribe("sensor_temp_chatter", 10, &RecordMsgLasting::SensorsTempCallback, this);
   sub_turn_motor_hall_ = hj_bf::HJSubscribe("/turn_motor_hall_chatter", 10, &RecordMsgLasting::TurnMotorHallCallback, this);
-  sub_wireless_charging_ = hj_bf::HJSubscribe("/wireless_charging_chatter", 10, &RecordMsgLasting::WirelessChargingCallback, this);
 #ifdef HJ_T1pro
   sub_dust_plug_ = hj_bf::HJSubscribe("t1pro/dust_plug_detection_chatter", 10,
                                       &RecordMsgLasting::DustPlugCallback, this);
@@ -130,17 +114,6 @@ void RecordMsgLasting::DustPlugCallback(const hj_interface::DustPlugDetection::C
   msg_append(dust_plug_logger_, "%s %u %u\n", oss.str().c_str(), msg->status1, msg->status2);
 }
 #endif
-
-void RecordMsgLasting::MotorCurCallback(const hj_interface::ElecMotorCur::ConstPtr& msg) {
-  ros::Time time_now = msg->custom_time;
-  std::time_t time_c = time_now.sec;
-  std::tm *ptm = std::localtime(&time_c);
-  std::ostringstream oss;
-  oss << std::put_time(ptm, "%Y-%m-%d %H:%M:%S");
-  msg_append(motor_cur_logger_, "%s %lf %d %d %d %d %d %d %d %d\n", oss.str().c_str(),
-          msg->custom_time.toSec(), msg->motor_l, msg->motor_r, msg->pump_l,
-          msg->pump_r, msg->turn, msg->dirtybox, msg->flipcover, msg->airbag);
-}
 
 void RecordMsgLasting::TurbidityCallback(const hj_interface::Turbidity::ConstPtr& msg) {
   ros::Time time_now = msg->timestamp;
@@ -166,10 +139,10 @@ void RecordMsgLasting::BatCallback(const hj_interface::Bat::ConstPtr& msg) {
   std::tm *ptm = std::localtime(&time_c);
   std::ostringstream oss;
   oss << std::put_time(ptm, "%Y-%m-%d %H:%M:%S");
-  msg_append(bat_logger_, "%s %d %d %d %d %d %d %d %d %d %d\n",
+  msg_append(bat_logger_, "%s %d %d %d %d %d %d %d %d %d %d %d\n",
           oss.str().c_str(), msg->power, msg->temp1, msg->temp2, msg->temp3,
           msg->bat_vol, msg->bat_disch_cur, msg->ch_vol, msg->charger_ch_cur,
-          msg->bat_cycle_times, msg->bat_health_left);
+          msg->bat_cycle_times, msg->bat_health_left, msg->disable_charge);
 }
 
 void RecordMsgLasting::PumpMotorSpeedCallback(const hj_interface::PumpMotorSpeed::ConstPtr& msg) {
@@ -218,26 +191,12 @@ void RecordMsgLasting::TurnMotorHallCallback(const std_msgs::UInt8::ConstPtr& ms
   msg_append(turn_motor_hall_logger_, "%s %d\n", oss.str().c_str(), msg->data);
 }
 
-void RecordMsgLasting::WirelessChargingCallback(const hj_interface::WirelessCharging::ConstPtr& msg) {
-  ros::Time time_now = ros::Time::now();
-  std::time_t time_c = time_now.sec;
-  std::tm *ptm = std::localtime(&time_c);
-  std::ostringstream oss;
-  oss << std::put_time(ptm, "%Y-%m-%d %H:%M:%S");  // format time string
-  msg_append(wireless_charging_logger_, "%s %d %d %d %d %d %d\n", oss.str().c_str(),
-          msg->bridge_circuit_vol, msg->charger_ch_vol, msg->bridge_circuit_cur,
-          msg->charger_ch_cur, msg->bridge_circuit_temp, msg->coil_temp);
-}
-
 RecordMsgLasting::~RecordMsgLasting() {
   if (bat_logger_ != nullptr) {
     hj_cst_log_del(bat_logger_);
   }
   if (out_water_logger_ != nullptr) {
     hj_cst_log_del(out_water_logger_);
-  }
-  if (motor_cur_logger_ != nullptr) {
-    hj_cst_log_del(motor_cur_logger_);
   }
   if (tur_logger_ != nullptr) {
     hj_cst_log_del(tur_logger_);
@@ -256,9 +215,6 @@ RecordMsgLasting::~RecordMsgLasting() {
   }
   if (turn_motor_hall_logger_ != nullptr) {
     hj_cst_log_del(turn_motor_hall_logger_);
-  }
-  if (wireless_charging_logger_ != nullptr) {
-    hj_cst_log_del(wireless_charging_logger_);
   }
 #ifdef HJ_T1pro
   if (dust_plug_logger_ != nullptr) {

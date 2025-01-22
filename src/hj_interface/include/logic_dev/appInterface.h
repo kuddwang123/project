@@ -24,9 +24,11 @@
 constexpr const char* kReqCmdInNetCfg = "InNetConfig";
 constexpr const char* kReqCmdShutdown = "Shutdown";
 constexpr const char* kReqCmdReset = "Reset";
+constexpr const char* kReqCmdFactoryReset = "FactoryReset";
 constexpr const char* kReqCmdLifeTime = "LifeTime";
 constexpr const char* kReqGetEntryPoint = "GetEntryPoint";
 constexpr const char* kReqSetEntryPoint = "SetEntryPoint";
+constexpr const char* kReqReportEntryPoint = "EntryPointReport";
 constexpr const char* kReqGetAirBagStatus = "GetAirBagStatus";
 constexpr const char* kAirBagStatusReport = "AirBagStatusReport";
 #define REQ_CMD_STOP_ACTION "StopAction"  // 停止动作

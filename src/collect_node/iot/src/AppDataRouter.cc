@@ -1,6 +1,5 @@
 #include "AppDataRouter.h"
 #include "log.h"
-#include "BuryPoint.h"
 #include "error.h"
 #include <algorithm>
 #include <aws/crt/UUID.h>
@@ -69,11 +68,12 @@ bool AppDataRouter::initIot(
         const std::string& endPoint, 
         const std::string& thingName)
 {
+/*
     if (awsConnectionPtr_->isConnected()) {
        awsConnectionPtr_->disconnect();
        sleep(2);
     }
-
+*/
     if (!awsConnectionPtr_->initialize(cert, key, clientId, endPoint)) {
         HJ_ERROR("aws connection init fail\n");
         return false;
@@ -82,7 +82,7 @@ bool AppDataRouter::initIot(
     return constructAwsMqttConn(thingName);
 }
 
-bool AppDataRouter::restartIot()
+bool AppDataRouter::restartIot(bool flag)
 {
     if (!shadowClientLinkPtr_ || !iotMqttClientLinkPtr_ || !awsConnectionPtr_) {
         HJ_ERROR("MQTT client not construct!\n");
@@ -107,7 +107,7 @@ bool AppDataRouter::restartIot()
         return false;
     }
 
-    return runIot(false);
+    return runIot(flag);
 }
 
 void AppDataRouter::dealSessionFunc(bool sessionPresent)
@@ -199,13 +199,17 @@ bool AppDataRouter::iotSubscribeDone(bool flag)
 bool AppDataRouter::stopIot(bool force)
 {
     iotRun_ = false;
+    /*
     if (force) {
         if (awsConnectionPtr_) {
+            cloudNotifyOffline();
             updateShadowOffline();
             sleep(1);
             awsConnectionPtr_->disconnect();
         }
-    } else if (awsConnectionPtr_ && awsConnectionPtr_->isConnected()) {
+    } else 
+    */if (awsConnectionPtr_ && awsConnectionPtr_->isConnected()) {
+        cloudNotifyOffline();
         updateShadowOffline();
         sleep(1);
         awsConnectionPtr_->disconnect();
@@ -242,7 +246,6 @@ void AppDataRouter::initRos()
 
 void AppDataRouter::connectSlot()
 {
-    //成功连接iot core后向服务器更新在线状态
     HJ_INFO("iot conn success, update online\n");
     //mqttTmr_.start();
     rapidjson::Document document;
@@ -260,21 +263,11 @@ void AppDataRouter::connectSlot()
     appdata.payload = utils::documentToString(document);
     appmsg.appdata.push_back(appdata);
     iotMqttClientLinkPtr_->iotMqttReport(appmsg, hj_interface::AppMsg::TOPIC);
-
-    auto bp = BaseBuryPointFactory::instance().getBuryPoint(BaseBuryPointFactory::kNET_CONFIG);
-    assert(bp);
-    NetCfgBuryPointPtr netbp = std::dynamic_pointer_cast<NetConfigBuryPoint>(bp);
-    netbp->triggerBigDataRpt(true);
 }
 
 void AppDataRouter::connFailSlot(int code, std::string msg)
 {
-    //连接iot core失败
     HJ_ERROR("iot conn fail: %d, %s\n", code, msg.c_str());
-    auto bp = BaseBuryPointFactory::instance().getBuryPoint(BaseBuryPointFactory::kNET_CONFIG);
-    assert(bp);
-    NetCfgBuryPointPtr netbp = std::dynamic_pointer_cast<NetConfigBuryPoint>(bp);
-    netbp->triggerBigDataRptWithMsg(false, NetConfigBuryPoint::kIOT_CONNECT_FAIL, msg);
 }
 
 void AppDataRouter::awsConnStaChangeSlot(bool state)
@@ -356,6 +349,19 @@ void AppDataRouter::updateShadowOffline()
     appdata.payload = "{\"online\":0}";
     appmsg.appdata.push_back(appdata);
     shadowClientLinkPtr_->dvcUpdateShadow(appmsg);
+}
+
+void AppDataRouter::cloudNotifyOffline()
+{
+    HJ_INFO("notify cloud offline!\n");
+    hj_interface::AppMsg appmsg;
+    hj_interface::AppData appdata;
+    
+    appdata.key = "NetStatReport";
+    appdata.payload = "{\"online\":0}";
+    appmsg.to = hj_interface::AppMsg::CLOUD;
+    appmsg.appdata.push_back(appdata);
+    doAppMsgReport(appmsg);
 }
 
 void AppDataRouter::mqttInitTmrCb(const hj_bf::HJTimerEvent&)

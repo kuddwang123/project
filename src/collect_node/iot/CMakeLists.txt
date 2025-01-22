@@ -4,6 +4,16 @@ set (CMAKE_CXX_STANDARD 14)
 set( HJ_WORKSPACE_PATH "../..")
 set(PLATFORM "amd64" CACHE STRING "amd64, i386, arm64_rk, etc.")
 set(INSTALL_DEVEL_PATH collect_node)
+
+set(RELEASE_VER "debug" CACHE STRING "debug or release")
+if(${RELEASE_VER} STREQUAL "debug")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+elseif(${RELEASE_VER} STREQUAL "release")
+  add_definitions(-DCONFIG_ENABLE_LOG=4)
+  set(CMAKE_BUILD_TYPE "Release")
+  set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
+endif()
+
 find_package(catkin REQUIRED COMPONENTS rostime roscpp)
 find_package(OpenSSL REQUIRED)
 
@@ -18,7 +28,6 @@ link_directories("${HJ_WORKSPACE_PATH}/thirdparty/platforms/${PLATFORM}/awsiot")
 link_directories("${HJ_WORKSPACE_PATH}/thirdparty/platforms/${PLATFORM}")
 
 add_definitions(-DFUNCTION_NAME="iot")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 catkin_package(CATKIN_DEPENDS message_runtime std_msgs)
 
 add_library(iot 

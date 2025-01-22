@@ -45,6 +45,11 @@ bool TcpTransport::listen(uint16_t port, int backlog)
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(port);
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    /*
+    if (::inet_pton(AF_INET, "192.168.4.1", &serv_addr.sin_addr) <= 0) {
+        HJ_ERROR("Invalid IP address or conversion failed");
+        return false;
+    }*/
     
     setSocketReuse(true);
     setSocketNonBlock();

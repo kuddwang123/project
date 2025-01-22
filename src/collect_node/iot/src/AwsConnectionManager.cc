@@ -16,6 +16,7 @@ AwsConnectionManager::AwsConnectionManager()
     syncConn_(false),
     connFailIntervalSec_(5) 
 {
+    //apiHandle_.InitializeLogging(Aws::Crt::LogLevel::Trace, "/userdata/aws_iot_sdk.log");
 }
 
 AwsConnectionManager::~AwsConnectionManager() 
@@ -62,11 +63,12 @@ bool AwsConnectionManager::disconnect()
 
 bool AwsConnectionManager::startConnect(bool sync)
 {
+/*
     if (isConnect_.load()) {
         HJ_INFO("MQTT already connected\n");
         return true;
     }
-
+*/
     syncConn_ = sync;
     
     return startConnectionThread();
@@ -126,15 +128,17 @@ bool AwsConnectionManager::initialize(const std::string& cert,
                     const std::string& clientId, 
                     const std::string& endpoint) 
 {
+/*
     if (isConnect_.load()) {
         HJ_ERROR("Connection Manager already init!\n");
         return false;
     }
-
+*/
     if (connRun_) {
         connRun_ = false;
         if (connectThread_.joinable()) {
             connEvtIncome_.store(true);
+            HJ_INFO("iot connect notify");
             connCond_.notify_all();
             connectThread_.join();
         }
@@ -149,6 +153,7 @@ bool AwsConnectionManager::initialize(const std::string& cert,
         return false;
     }
 
+    connptr_->SetReconnectTimeout(2, 8);
     setMqttClientCallBack();
 
     if (setLastWill())
@@ -186,6 +191,7 @@ bool AwsConnectionManager::mqttClientConstruct(const std::string& cert, const st
 
     auto mqttClient = Aws::Iot::MqttClient();
     connptr_ = mqttClient.NewConnection(clientConfig);
+    HJ_INFO("***mqtt new connection****\n");
     if (!*connptr_) {
         HJ_ERROR(
             "MQTT Connection Creation failed with error %s\n",
@@ -236,12 +242,14 @@ bool AwsConnectionManager::startConnectionThread()
     if (connRun_) {
         connEvtIncome_.store(true);
         connRun_ = false;
+        HJ_INFO("iot connect notify");
         connCond_.notify_all();
     }
 
     if (connectThread_.joinable())
         connectThread_.join();
 
+    isConnect_.store(false);
     connectThread_ = std::thread(&AwsConnectionManager::connectThreadFunc, this);
     
     if (syncConn_) {
@@ -284,6 +292,7 @@ void AwsConnectionManager::connectionSuccessCb(
     isConnect_.store(true);
     conn_signal_();
     connEvtIncome_.store(true);
+    HJ_INFO("iot connect notify");
     connCond_.notify_one();
 }
 
@@ -295,6 +304,7 @@ void AwsConnectionManager::connectionFalureCb(
     isConnect_.store(false);
     conn_fail_signal_(faildata->error, Aws::Crt::ErrorDebugString(faildata->error));
     connEvtIncome_.store(true);
+    HJ_INFO("iot connect notify");
     connCond_.notify_one();
 }
 
@@ -339,13 +349,16 @@ void AwsConnectionManager::connectThreadFunc()
 
     while (!isConnect_.load() && connRun_) {
         std::unique_lock<std::mutex> lc(connmtx_);
+        connEvtIncome_.store(false);
         HJ_INFO("MQTT Connection [%s] start...\n", clientId_.c_str());
         bool connRst = connptr_->Connect(clientId_.data(), false, keepAliveTimeSecs_, pingTimeoutMs_, protocolOperationTimeoutMs_);
+        HJ_INFO("MQTT Connection result: %d\n", connRst);
         if (connRst) {
+            HJ_INFO("iot connect wait...");
             connCond_.wait(lc, [&]{
                 return connEvtIncome_.load();
             });
-            connEvtIncome_.store(false);
+            HJ_INFO("iot connect wait done");
         }
 
         if (!connRun_) {

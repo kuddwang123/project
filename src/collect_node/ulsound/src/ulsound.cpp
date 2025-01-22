@@ -30,58 +30,66 @@ HJ_REGISTER_FUNCTION(factory) {
 namespace collect_node_ulsound {
 
 void Ulsound::PushFrontError() {
-  if (!front_uls_status_ && front_error_count_ == 0) {
+  if (!front_uls_status_ && front_normal_count_ >= FRONT_10S_COUNT) {
     srv_msg_.request.code_val = ULSOUND_FRONT_USS_DATA_ERROR;
     srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::NORMAL;
     hj_bf::HjPushSrv(srv_msg_);
     front_uls_status_ = true;
-  } else if (front_uls_status_ && front_error_count_ > ERROR_COUNT) {
+    // HJ_INFO("front_normal_count_:%d", front_normal_count_);
+  } else if (front_uls_status_ && front_error_count_ >= FRONT_10S_COUNT) {
     srv_msg_.request.code_val = ULSOUND_FRONT_USS_DATA_ERROR;
     srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::ERROR;
     hj_bf::HjPushSrv(srv_msg_);
     front_uls_status_ = false;
+    // HJ_INFO("front_error_count_:%d", front_error_count_);
   }
 }
 
 void Ulsound::PushSideFrontError() {
-  if (!side_front_uls_status_ && side_front_error_count_ ==0) {
+  if (!side_front_uls_status_ && side_front_normal_count_ >= ULTRA_10S_COUNT) {
     srv_msg_.request.code_val = ULSOUND_SIDE_MID_DATA_ERROR;
     srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::NORMAL;
     hj_bf::HjPushSrv(srv_msg_);
     side_front_uls_status_ = true;
-  } else if (side_front_uls_status_ && side_front_error_count_ > ERROR_COUNT) {
+    // HJ_INFO("side_front_normal_count_:%d", side_front_normal_count_);
+  } else if (side_front_uls_status_ && side_front_error_count_ >= ULTRA_10S_COUNT) {
     srv_msg_.request.code_val = ULSOUND_SIDE_MID_DATA_ERROR;
     srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::ERROR;
     hj_bf::HjPushSrv(srv_msg_);
     side_front_uls_status_ = false;
+    // HJ_INFO("side_front_error_count_:%d", side_front_error_count_);
   }
 }
 
 void Ulsound::PushSideBackError() {
-  if (!side_back_uls_status_ && side_back_error_count_ == 0) {
+  if (!side_back_uls_status_ && side_back_normal_count_ >= ULTRA_10S_COUNT) {
     srv_msg_.request.code_val = ULSOUND_SIDE_BACK_DATA_ERROR;
     srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::NORMAL;
     hj_bf::HjPushSrv(srv_msg_);
     side_back_uls_status_ = true;
-  } else if (side_back_uls_status_ && side_back_error_count_ > ERROR_COUNT) {
+    // HJ_INFO("side_back_normal_count_:%d", side_back_normal_count_);
+  } else if (side_back_uls_status_ && side_back_error_count_ >= ULTRA_10S_COUNT) {
     srv_msg_.request.code_val = ULSOUND_SIDE_BACK_DATA_ERROR;
-    srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::ERROR;
+    srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::WARNING;
     hj_bf::HjPushSrv(srv_msg_);
     side_back_uls_status_ = false;
+    // HJ_INFO("side_back_normal_count_:%d", side_back_error_count_);
   }
 }
 
 void Ulsound::PushDownError() {
-  if (!down_uls_status_ && down_error_count_ == 0) {
+  if (!down_uls_status_ && down_normal_count_ >= ULTRA_10S_COUNT) {
     srv_msg_.request.code_val = ULSOUND_DOWN_LEFT_DATA_ERROR;
     srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::NORMAL;
     hj_bf::HjPushSrv(srv_msg_);
     down_uls_status_ = true;
-  } else if (down_uls_status_ && down_error_count_ > ERROR_COUNT) {
+    // HJ_INFO("down_normal_count_:%d", down_normal_count_);
+  } else if (down_uls_status_ && down_error_count_ >= ULTRA_10S_COUNT) {
     srv_msg_.request.code_val = ULSOUND_DOWN_LEFT_DATA_ERROR;
-    srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::ERROR;
+    srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::WARNING;
     hj_bf::HjPushSrv(srv_msg_);
     down_uls_status_ = false;
+    // HJ_INFO("down_error_count_:%d", down_error_count_);
   }
 }
 
@@ -110,6 +118,7 @@ void Ulsound::ReadFront(const hj_bf::HJTimerEvent &) {  // 串口发送线程函
         triple_ultra_msg_.status = 0;
         triple_ultra_msg_.timestamp = GetTimeNow();
         front_error_count_ = 0;
+        front_normal_count_++;
         triple_ultra_pub_.publish(triple_ultra_msg_);
         PushFrontError();
       } else {
@@ -119,6 +128,7 @@ void Ulsound::ReadFront(const hj_bf::HJTimerEvent &) {  // 串口发送线程函
         HJ_ERROR("front sum error, status:%x", triple_ultra_msg_.status);
         PushFrontError();
         front_error_count_++;
+        front_normal_count_ = 0;
       }
       while (!data_queue.empty()) {  // 正常数据，清空缓存的异常数据
         data_queue.pop();
@@ -131,7 +141,8 @@ void Ulsound::ReadFront(const hj_bf::HJTimerEvent &) {  // 串口发送线程函
       triple_ultra_msg_.front_r = 65535;
       triple_ultra_pub_.publish(triple_ultra_msg_);
       PushFrontError();
-      front_error_count_++;
+      front_error_count_ += TRIPLE_ULTRA_FREQUENCY;
+      front_normal_count_ = 0;
     } else {  // 未读取到8个字节，缓存拼接
       for (int i = 0; i < ret; i++) {
         data_queue.push(front_data_.databuf[i]);
@@ -154,6 +165,7 @@ void Ulsound::ReadFront(const hj_bf::HJTimerEvent &) {  // 串口发送线程函
           triple_ultra_msg_.status = 0;
           triple_ultra_msg_.timestamp = GetTimeNow();
           front_error_count_ = 0;
+          front_normal_count_ += 2;  // 两帧拼成1帧，正常数据计数加2
           triple_ultra_pub_.publish(triple_ultra_msg_);
           PushFrontError();
           HJ_INFO("splicing front OK");
@@ -165,11 +177,10 @@ void Ulsound::ReadFront(const hj_bf::HJTimerEvent &) {  // 串口发送线程函
             HJ_ERROR("splicing front check error, status:%x", triple_ultra_msg_.status);
           }
           PushFrontError();
-          front_error_count_++;
+          front_error_count_ += 2;  // 两帧拼成1帧，异常数据计数加2
+          front_normal_count_ = 0;
         }
       }
-      front_error_count_++;
-      PushFrontError();
       if (front_error_count_ < ERROR_COUNT) {
         HJ_INFO("recv triple error: %d,  status:%x, databuf [%d,%d,%d,%d,%d,%d,%d,%d]", ret, triple_ultra_msg_.status,
               front_data_.databuf[0], front_data_.databuf[1], front_data_.databuf[2], front_data_.databuf[3],
@@ -185,6 +196,7 @@ void Ulsound::ReadFront(const hj_bf::HJTimerEvent &) {  // 串口发送线程函
     }
     PushFrontError();
     front_error_count_++;
+    front_normal_count_ = 0;
   }
 }
 
@@ -215,6 +227,7 @@ void Ulsound::ReadSideFront() {
           left_front_msg_.timestamp = GetTimeNow();
           left_front_pub_.publish(left_front_msg_);
           side_front_error_count_ = 0;
+          side_front_normal_count_++;
           PushSideFrontError();
         } else {
           left_front_msg_.timestamp = GetTimeNow();
@@ -223,6 +236,7 @@ void Ulsound::ReadSideFront() {
           HJ_ERROR("left uss J171 sum error!,status=%x", left_front_msg_.status);
           PushSideFrontError();
           side_front_error_count_++;
+          side_front_normal_count_ = 0;
         }
       } else {
         left_front_msg_.timestamp = GetTimeNow();
@@ -233,7 +247,8 @@ void Ulsound::ReadSideFront() {
                 rec_data_.databuf[20], rec_data_.databuf[21], rec_data_.databuf[22], rec_data_.databuf[23]);
         }
         PushSideFrontError();
-        side_front_error_count_++;
+        side_front_error_count_ += ULTRA_FREQUENCY;
+        side_front_normal_count_ = 0;
       }
     } else {
       left_front_msg_.timestamp = GetTimeNow();
@@ -244,6 +259,7 @@ void Ulsound::ReadSideFront() {
       }
       PushSideFrontError();
       side_front_error_count_++;
+      side_front_normal_count_ = 0;
     }
   }
 }
@@ -255,10 +271,11 @@ void Ulsound::ReadSideBack() {
   int module_restart_flag = 0;
   while (hj_bf::ok()) {
     bool res = hj_bf::getVariable("module_restart_flag", module_restart_flag);
-    if (res && module_restart_flag != 0) {
+    if ((res && module_restart_flag != 0) || calibration_flag_.load()) {
       usleep(300000);  // 等待300ms,等待模块重启完成
       continue;
     }
+    reading_flag_.store(true);
     ret = write(side_uart_back_.GetFd(), &senddata, 1);
     if (ret > 0) {
       ret = read(side_uart_back_.GetFd(), &(rec_data_.databuf[10]), 8);
@@ -275,6 +292,7 @@ void Ulsound::ReadSideBack() {
           left_back_msg_.timestamp = GetTimeNow();
           left_back_pub_.publish(left_back_msg_);
           side_back_error_count_ = 0;
+          side_back_normal_count_++;
           PushSideBackError();
         } else {
           left_back_msg_.timestamp = GetTimeNow();
@@ -287,6 +305,7 @@ void Ulsound::ReadSideBack() {
           }
           PushSideBackError();
           side_back_error_count_++;
+          side_back_normal_count_ = 0;
         }
       } else {
         left_back_msg_.timestamp = GetTimeNow();
@@ -297,7 +316,8 @@ void Ulsound::ReadSideBack() {
                 rec_data_.databuf[10], rec_data_.databuf[11], rec_data_.databuf[12], rec_data_.databuf[13]);
         }
         PushSideBackError();
-        side_back_error_count_++;
+        side_back_error_count_ += ULTRA_FREQUENCY;
+        side_back_normal_count_ = 0;
       }
     } else {
       left_back_msg_.timestamp = GetTimeNow();
@@ -308,7 +328,9 @@ void Ulsound::ReadSideBack() {
       }
       PushSideBackError();
       side_back_error_count_++;
+      side_back_normal_count_ = 0;
     }
+    reading_flag_.store(false);
   }
 }
 
@@ -341,6 +363,7 @@ void Ulsound::ReadDown() {
           down_right_msg_.timestamp = GetTimeNow();
           down_right_pub_.publish(down_right_msg_);
           down_error_count_ = 0;
+          down_normal_count_++;
           PushDownError();
         } else {
           down_right_msg_.timestamp = GetTimeNow();
@@ -349,15 +372,17 @@ void Ulsound::ReadDown() {
           HJ_ERROR("down uss sum error");
           PushDownError();
           down_error_count_++;
+          down_normal_count_ = 0;
         }
         data_deque.clear();
-      } else if(ret == 0) {
+      } else if (ret == 0) {
         down_right_msg_.timestamp = GetTimeNow();
         down_right_msg_.status = 1;
         down_right_msg_.dist = 65535;
         down_right_pub_.publish(down_right_msg_);
         PushDownError();
-        down_error_count_++;
+        down_error_count_ += ULTRA_FREQUENCY;
+        down_normal_count_ = 0;
       } else {
         for (int i = 0; i < ret; i++) {
           data_deque. emplace_back(data_buffer[i]);
@@ -378,6 +403,7 @@ void Ulsound::ReadDown() {
             down_right_msg_.status = 0;
             down_right_pub_.publish(down_right_msg_);
             down_error_count_ = 0;
+            down_normal_count_++;
             PushDownError();
             HJ_INFO("splicing front OK");
           } else {
@@ -387,10 +413,9 @@ void Ulsound::ReadDown() {
             HJ_ERROR("splicing down check error, status:%x", down_right_msg_.status);
             PushDownError();
             down_error_count_++;
+            down_normal_count_ = 0;
           }
         }
-        down_error_count_++;
-        PushDownError();
         if (down_error_count_ < ERROR_COUNT) {
           HJ_INFO("recv down_right_msg_ error: %d,  status:%x, databuf [%d,%d,%d,%d]", ret, down_right_msg_.status,
                 data_buffer[0], data_buffer[1], data_buffer[2], data_buffer[3]);
@@ -405,18 +430,93 @@ void Ulsound::ReadDown() {
       }
       PushDownError();
       down_error_count_++;
+      down_normal_count_ = 0;
     }
+  }
+}
+
+
+int Ulsound::WriteToSerial(int fd, const uint8_t *buffer, size_t size) {
+  ssize_t written = write(fd, buffer, size);
+  if (written < 0) {
+    perror("WriteToSerial:");
+    return -1;
+  }
+  return 0;
+}
+
+int Ulsound::ReadFromSerial(int fd, uint8_t *buffer, size_t size) {
+  int total_bytes_read = 0;
+  struct timespec start_time, current_time;
+  clock_gettime(CLOCK_MONOTONIC, &start_time);
+  const int TIMEOUT_SECONDS = 3;
+  int64_t elapsed_time = 0;
+  // HJ_INFO("ReadFromSerial in");
+  while (total_bytes_read < size) {
+    ssize_t bytes_read = read(fd, buffer + total_bytes_read, size - total_bytes_read);
+    // HJ_INFO("ReadFromSerial in, bytes_read:%d", bytes_read);
+    if (bytes_read < 0) {
+      // HJ_INFO("ReadFromSerial error, error:%d", errno);
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        // 检查是否超时
+        clock_gettime(CLOCK_MONOTONIC, &current_time);
+        elapsed_time = (current_time.tv_sec - start_time.tv_sec) * 1000 + (current_time.tv_nsec - start_time.tv_nsec) / 1000000;
+        // HJ_INFO("no data read from serial, elapsed_time:%lld", elapsed_time);
+        if (elapsed_time > TIMEOUT_SECONDS * 1000) {
+          HJ_INFO("timeout: %d no data read from serial", TIMEOUT_SECONDS);
+          return ReturnType::kRetTimeout; // 返回超时错误码
+        }
+        // 资源暂时不可用，稍后重试
+        usleep(10000); // 等待10毫秒
+        continue;
+      }
+      perror("ReadFromSerial:");
+      return ReturnType::kRetError; // 返回其他错误码
+    } else if (buffer[0] == 0xBF) {
+      total_bytes_read += bytes_read;
+    }
+    
+  }
+  return total_bytes_read;
+}
+
+int Ulsound::VerifyInwater(int fd) {
+  uint8_t command[] = {0xBF, 0x01, 0xAA, 0x6A};
+  uint8_t response[5] = {};  // 假设返回的数据长度为5
+  int res = WriteToSerial(fd, command, sizeof(command));
+  usleep(100000); // 等待100毫秒
+  res = WriteToSerial(fd, command, sizeof(command));
+  // HJ_INFO("VerifyInwater in, res:%d", res);
+  int ret = ReadFromSerial(fd, response, sizeof(response));
+  // HJ_INFO("VerifyInwater in, ret:%d", ret);
+  if(ret < 0){
+    if(ret == ReturnType::kRetError){
+      HJ_ERROR("read from serial error");
+    }
+    else if(ret == ReturnType::kRetTimeout){
+      HJ_ERROR("read timeout!!!");
+    }
+    HJ_ERROR("VerifyInwater error\n");
+    return ret;
+  }
+  HJ_INFO("response: %d, %d, %d, %d, %d", response[0], response[1], response[2], response[3], response[4]);
+  if (response[3] == 0x01) {
+      HJ_INFO("VerifyInwater success");
+      return ReturnType::kRetOk;
+  } else {
+      HJ_ERROR("VerifyInwater fail");
+      return ReturnType::kRetFail;
   }
 }
 
 Ulsound::~Ulsound() {}
 
-void Ulsound::RestartCallback(const std_msgs::Bool::ConstPtr& msg) {
-  if (msg->data != 0) {
-    HJ_INFO("restart Ulsound");
-    Start();
-  }
-}
+// void Ulsound::RestartCallback(const std_msgs::Bool::ConstPtr& msg) {
+//   if (msg->data != 0) {
+//     HJ_INFO("restart Ulsound");
+//     Start();
+//   }
+// }
 
 bool Ulsound::Start() {
   bool ret = false;
@@ -430,7 +530,7 @@ bool Ulsound::Start() {
     if (!ret) {
       HJ_ERROR("front uls ret init = %d", ret);
       srv_msg_.request.code_val = ULSOUND_FRONT_USS_INIT_ERROR;
-      srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::FAILED;
+      srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::ERROR;
       hj_bf::HjPushSrv(srv_msg_);
       front_init_status_ = false;
     } else {
@@ -471,7 +571,7 @@ bool Ulsound::Start() {
       if (!ret) {
         HJ_ERROR("side back uls ret init = %d", ret);
         srv_msg_.request.code_val = ULSOUND_SIDE_BACK_INIT_ERROR;
-        srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::FAILED;
+        srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::WARNING;
         hj_bf::HjPushSrv(srv_msg_);
         side_back_init_status_ = false;
       } else {
@@ -490,7 +590,7 @@ bool Ulsound::Start() {
         if (!ret) {
           HJ_ERROR("down uls ret init = %d", ret);
           srv_msg_.request.code_val = ULSOUND_DOWN_INIT_ERROR;
-          srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::FAILED;
+          srv_msg_.request.status = hj_interface::HealthCheckCodeRequest::WARNING;
           hj_bf::HjPushSrv(srv_msg_);
           down_init_status_ = false;
         } else {
@@ -510,7 +610,46 @@ bool Ulsound::Start() {
 
 void Ulsound::TimeDiffCallback(const std_msgs::Float64::ConstPtr& msg) {
   time_diff_.store(msg->data);
-  HJ_INFO("time_diff_now:%f", msg->data);
+  HJ_INFO("time_diff_now:%lf", msg->data);
+}
+
+void Ulsound::CalibrationCallback(const std_msgs::UInt8::ConstPtr& msg) {
+  HJ_INFO("calibration_flag:%d", msg->data);
+  if (msg->data == 1) {
+    std::unique_lock<std::mutex> lck(mutex_);
+    calibration_flag_.store(true);
+    cv_.notify_one();
+  }
+}
+
+void Ulsound::CalibrationThread() {
+  static int ret = ReturnType::kRetNone;
+  static int retry_count = ReturnType::kRetNone;  // 防止算法重复发送命令
+  static int count = 0;  // 失败重试次数
+  while (hj_bf::ok()) {
+    std::unique_lock<std::mutex> lck(mutex_);
+    cv_.wait(lck, [this] {
+      HJ_INFO("calibration_flag_ set ret:%d, calibration_flag:%d", retry_count, calibration_flag_.load());
+      while (reading_flag_.load()) {
+        usleep(20000);  // 等待10毫秒
+        // std::this_thread::yield();
+      }
+      if (calibration_flag_.load() && retry_count == ReturnType::kRetNone) {
+        retry_count = ReturnType::kRetOk;
+        ret = VerifyInwater(this->side_uart_back_.GetFd());
+        HJ_INFO("retry_count:%d, ret:%d", count, ret);
+        while (ret != ReturnType::kRetOk && count < 4) {
+          ret = VerifyInwater(this->side_uart_back_.GetFd());
+          ret != ReturnType::kRetOk ? count++ : count = 4;
+        }
+        count = 0;
+        retry_count = ReturnType::kRetNone;
+        return (ret == ReturnType::kRetOk);
+      }
+     });
+     calibration_flag_.store(false);
+     HJ_INFO("calibration_flag_ wait ret:%d", ret);
+  }
 }
 
 ros::Time Ulsound::GetTimeNow() {
@@ -583,7 +722,8 @@ Ulsound::Ulsound(const rapidjson::Value &json_conf) : hj_bf::Function(json_conf)
   left_front_pub_ = hj_bf::HJAdvertise<hj_interface::LeftFront>("x9/left_front", 10);
   left_back_pub_ = hj_bf::HJAdvertise<hj_interface::LeftBack>("x9/left_back", 10);
   down_right_pub_ = hj_bf::HJAdvertise<hj_interface::DownRight>("x9/down_right", 10);
-  restart_sub_ = hj_bf::HJSubscribe("/xxx", 1, &Ulsound::RestartCallback, this);
+  // restart_sub_ = hj_bf::HJSubscribe("/xxx", 1, &Ulsound::RestartCallback, this);
+  calibration_sub_ = hj_bf::HJSubscribe("/ulsound/calibration", 1, &Ulsound::CalibrationCallback, this);
   sub_time_diff_ = hj_bf::HJSubscribe("/time_diff_chatter", 1, &Ulsound::TimeDiffCallback, this);
 
   triple_ultra_msg_.front_l = 65535;
@@ -594,6 +734,7 @@ Ulsound::Ulsound(const rapidjson::Value &json_conf) : hj_bf::Function(json_conf)
   down_right_msg_.dist = 65535;
 
   Start();
+  std::thread(&Ulsound::CalibrationThread, this).detach();
   HJ_INFO("Ulsound init success");
 }
 }  // namespace collect_node_ulsound

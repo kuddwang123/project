@@ -132,7 +132,10 @@ ssize_t hjlog_append(void* log, unsigned int level,
     size_t len = 256 + data.length();
     char buf[len] = {0};
     struct stat fstat;
-    stat(usr->_file->data(), &fstat);
+    int res = stat(usr->_file->data(), &fstat);
+    if (res != 0) {
+       return 0;
+    }
     ssize_t written = 0;
 
     if(needtime) {
@@ -171,6 +174,45 @@ ssize_t hjlog_append(void* log, unsigned int level,
     return written;
 }
 
+
+ssize_t msg_append(void* log, const char *format, ...)
+{
+    if (log ==  nullptr) {
+        return -1;
+    }
+
+    struct hjlog::logger* usr = static_cast<struct hjlog::logger*>(log);
+
+    if (usr->_fd <= 0) {
+        return 0;
+    }
+
+    va_list args;
+    va_start(args, format);
+    auto data = std::move(hjlog::funformat(format, args));
+    va_end(args);
+    size_t len = 128 + data.length();
+    // char* buf = new char[len]; //clang tidy require
+    char buf[len] = {0};
+    struct stat fstat;
+    int res = stat(usr->_file->data(), &fstat);
+    if (res != 0) {
+        return 0;
+    }
+    ssize_t written = 0;
+    snprintf(buf, len, "%s",data.data());
+
+    {
+        std::lock_guard<std::mutex> lc(usr->_mtx);
+        if(fstat.st_size >= usr->_size) {
+            rollover(usr);
+        }
+        written = write(usr->_fd, buf, strlen(buf));
+    }
+
+    return written;
+}
+
 void* hj_cst_log_add(const char* file, unsigned int level, unsigned int size, unsigned int num)
 {
     int fd = -1;
@@ -183,7 +225,9 @@ void* hj_cst_log_add(const char* file, unsigned int level, unsigned int size, un
 
     std::string parent_path = boostfile.parent_path().string();
 
-    if ((parent_path != "/tmp/logging") && (parent_path != "/userdata/hj/log")) {
+    if ((parent_path != "/tmp/logging") && (parent_path != "/userdata/hj/log") &&
+        (parent_path != "/userdata/hj/log/sensor_data_other") &&
+        (parent_path != "/userdata/hj/log/mcukey")) {
         fprintf(stderr, "hj cst log add fail, invalid parent path:%s\n", parent_path.c_str());
         return NULL;
     }

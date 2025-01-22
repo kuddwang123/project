@@ -18,7 +18,6 @@
 #include "ros/ros.h"
 #define BOOST_STACKTRACE_USE_ADDR2LINE
 #include <boost/stacktrace.hpp>
-
 namespace hj_bf {
   constexpr char g_node_config_file_env_set[] = "HJ_NODE_CONFIG_FILE";
 struct NodeConfig {
@@ -30,6 +29,8 @@ struct NodeConfig {
   std::string value_str;
   std::string node_name;
   std::vector<unsigned char> crypt_val;
+  std::string remote_config_path;
+  std::string log_level;
 };
 void readConfigure(const std::string &config_file_name, std::shared_ptr<struct NodeConfig> out_config) ;
 class HJPublisher {

@@ -35,6 +35,8 @@
 #endif
 #include "hj_interface/Atime.h"
 #include "hj_interface/SensorDataRecord.h"
+#include "hj_interface/ElecMotorCur.h"
+#include "hj_interface/WirelessCharging.h"
 
 
 namespace collect_node_utils_func {  // your namespace
@@ -78,6 +80,8 @@ class RecordMsg {
   void WriteImu(const hj_interface::Atime::ConstPtr&);
   void DealTaskCallback(const hj_interface::SensorDataRecord::ConstPtr&);
   void UploadCallback(const std_msgs::Bool::ConstPtr&);
+  void MotorCurCallback(const hj_interface::ElecMotorCur::ConstPtr&);
+  void WirelessChargingCallback(const hj_interface::WirelessCharging::ConstPtr&);
  private:
   std::atomic<bool> writing_enabled_{false};  // true: 写入  false: 不能写入
   std::atomic<bool> space_enabled_{true};  // true: 空间足够  false: 空间不足
@@ -100,6 +104,8 @@ class RecordMsg {
   int fd_down_left_{-1};
   int fd_down_right_{-1};
 #endif
+  void* motor_cur_logger_{nullptr};
+  void* wireless_charging_logger_{nullptr};
   std::string log_prefix_;
   std::mutex mtx_;
 
@@ -120,10 +126,12 @@ class RecordMsg {
 #endif
   hj_bf::HJSubscriber imu_time_sub_;
   hj_bf::HJSubscriber motor_tmie_sub_;
+  hj_bf::HJSubscriber sub_motor_cur_;
+  hj_bf::HJSubscriber sub_wireless_charging_;
 
   hj_bf::HJSubscriber task_sub_;  // task sub
-  hj_bf::HJSubscriber upload_sub_;  // upload sensor data sub
-  hj_bf::HJPublisher pub_upload_;
+  // hj_bf::HJSubscriber upload_sub_;  // upload sensor data sub
+  // hj_bf::HJPublisher pub_upload_;
 
 };
 }  // namespace collect_node_utils_func

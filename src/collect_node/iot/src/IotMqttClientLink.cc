@@ -63,6 +63,11 @@ void IotMqttClientLink::mqttMsgIncome(const Aws::Crt::ByteBuf &msg, uint8_t rout
 
 bool IotMqttClientLink::iotMqttResp(const hj_interface::AppMsg::ConstPtr& msg)
 {
+    if (!iotMqttClientPtr_) {
+        HJ_INFO("mqtt client not construct, filter response!\n");
+        return false;
+    }
+
     Aws::Crt::JsonObject resp;
 
     if (msg->appdata.size() == 1) { //should only have one group response

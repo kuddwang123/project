@@ -1,10 +1,11 @@
 {
   "so_dir":"/data/hj/lib",
-  "log_path_config":"/data/hj/config/hj_log.config",
+  "log_path_config":"/data/hj/config/hj_log_utils_node.config",
   "all_log_close":true,
   "node_log_close":false,
   "node_name":"utils_node",
   "node_threads":4,
+  "remote_config_path":"/userdata/hj/config",
   "functions": [
     {
       "ID": "core_dump",
@@ -21,6 +22,10 @@
         "ID": "health_monitor",
         "name": "health_monitor",
         "test_transmit": "well come health_monitor"
+    },
+    {
+      "ID": "health_forward",
+      "name": "health_forward"
     }
   ]
 }

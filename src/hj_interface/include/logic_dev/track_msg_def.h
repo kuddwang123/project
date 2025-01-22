@@ -9,6 +9,7 @@
 #define PUMP_CURRENT_VARIBALE_EVENT "pumpCurrentEvent"
 
 constexpr const char* kTimeoutShutdownEvent = "machineOffOvertimeEvent";
+constexpr const char* kCallbackevent = "callbackEvent";
 
 namespace st_define {
 struct OtaUpgrade {

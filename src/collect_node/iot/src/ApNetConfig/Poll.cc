@@ -63,11 +63,10 @@ void Poll::update(int timeout)
     }
 
     for (int i = 0; i < cnt; i++) {
-        std::unique_lock<std::mutex> lock(mtx_);
+        std::lock_guard<std::recursive_mutex> lock(r_mtx_);
         auto it = std::find_if(sockVec_.begin(), sockVec_.end(), [&](const std::shared_ptr<socketInfo>& item) {
             return events_[i].data.fd == item->_fd; 
         });
-        lock.unlock();
 
         if (it != sockVec_.end()) {
             func = (*it)->_cbfunc;
@@ -84,7 +83,7 @@ bool Poll::addSocket(int fd, const socketUpdateFunc& updatecb)
     event.data.fd = fd;
     event.events = EPOLLIN | EPOLLOUT | EPOLLHUP | EPOLLRDHUP;
     
-    std::unique_lock<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(r_mtx_);
     auto it = std::find_if(sockVec_.begin(), sockVec_.end(), [&](const std::shared_ptr<socketInfo>& item) {
         return fd == item->_fd; 
     });
@@ -107,7 +106,7 @@ bool Poll::addSocket(int fd, const socketUpdateFunc& updatecb)
 
 bool Poll::deleteSocket(int fd)
 {
-    std::unique_lock<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(r_mtx_);
     auto it = std::find_if(sockVec_.begin(), sockVec_.end(), [&](const std::shared_ptr<socketInfo>& item) {
         return fd == item->_fd; 
     });

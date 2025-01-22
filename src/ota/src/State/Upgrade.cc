@@ -36,6 +36,8 @@ bool Upgrade::dowork(const boost::any& para)
 {
     failModule_ = none;
     status_ = WORKING;
+    failMsg_.empty();
+    angoOta_ = 2;
     std::string info = boost::any_cast<std::string>(para);
     nlohmann::json baseJson(nlohmann::json::object());
     nlohmann::json ledJson(nlohmann::json::object());
@@ -48,21 +50,25 @@ bool Upgrade::dowork(const boost::any& para)
         angoJson = cutRstJson["mcu"]["ango"];
     } catch (const std::exception& e) {
         HJ_CST_TIME_ERROR(ota_logger, "json parse error\n");
+        failMsg_ = "json parse error";
         return false;
     }
     
     if(!angoJson.contains("path") || !angoJson.contains("version")) {
         HJ_CST_TIME_ERROR(ota_logger, "ango json parse error\n");
+        failMsg_ = "ango json parse error";
         return false;
     }
 
     if(!baseJson.contains("path") || !baseJson.contains("version")) {
         HJ_CST_TIME_ERROR(ota_logger, "base json parse error\n");
+        failMsg_ = "base json parse error";
         return false;
     }
 
     if(!ledJson.contains("path") || !ledJson.contains("version")) {
         HJ_CST_TIME_ERROR(ota_logger, "led json parse error\n");
+        failMsg_ = "led json parse error";
         return false;
     }
 
@@ -73,6 +79,7 @@ bool Upgrade::dowork(const boost::any& para)
         ++abcnt;
         if (abcnt >= 50) {
             HJ_CST_TIME_ERROR(ota_logger, "air bag release time out\n");
+            failMsg_ = "air bag release time out";
             return false;
         }
     }
@@ -85,11 +92,15 @@ bool Upgrade::dowork(const boost::any& para)
             angoJson["version"].get<std::string>().c_str());
     } else if (!upgradeAngo(angoJson["path"], angoJson["version"])) {
         HJ_CST_TIME_ERROR(ota_logger, "ota ango fail!\n");
+        angoOta_ = 0;
         //failModule_ = ango;
         //return false;
+    } else {
+        HJ_CST_TIME_DEBUG(ota_logger, "ota ango success!\n");
+        angoOta_ = 1;
     }
     otaRptFunc_(2, 75, "", 0);
-    HJ_CST_TIME_DEBUG(ota_logger, "ota ango success!\n");
+    
 
     if (mcuVerJson_.contains("led_ver") && 
         (mcuVerJson_["led_ver"].get<std::string>() == ledJson["version"].get<std::string>())) {   
@@ -99,6 +110,7 @@ bool Upgrade::dowork(const boost::any& para)
     } else if (!upgradeLed(ledJson["path"], ledJson["version"])) {
         HJ_CST_TIME_ERROR(ota_logger, "ota led fail!\n");
         failModule_ = ledboard;
+        failMsg_ = curOtaRet_.msg_;
         return false;
     }
     otaRptFunc_(2, 80, "", 0);
@@ -107,6 +119,7 @@ bool Upgrade::dowork(const boost::any& para)
     if (!upgradeBase(baseJson["path"], baseJson["version"])) {
         HJ_CST_TIME_ERROR(ota_logger, "ota base fail!\n");
         failModule_ = baseboard;
+        failMsg_ = curOtaRet_.msg_;
         doUpgradeBack(ledboard);
         return false;
     }
@@ -116,6 +129,7 @@ bool Upgrade::dowork(const boost::any& para)
     if (!upgradeSoc()) {
         HJ_CST_TIME_ERROR(ota_logger, "ota soc fail!\n");
         failModule_ = soc;
+        failMsg_ = curOtaRet_.msg_;
         doUpgradeBack(none);
         return false;
     }

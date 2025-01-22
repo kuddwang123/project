@@ -17,7 +17,6 @@ export BIG_DATA_CONFIG_FILE="${ABSOLUTE_PATH}/config/big_data_config.json"
 #export HJ_LOG_CLOSE_collect_node=close
 mkdir -p /tmp/logging
 mkdir -p /userdata/hj/log/logging
-rm -rf /userdata/hj/log/sensor_data
 
 if [ ! -d "/userdata/hj/maps" ]; then
     mkdir -p /userdata/hj/maps
@@ -55,7 +54,7 @@ while true; do
 done
 
 
-PID=`ps -ef | grep -E "monitor.sh|middleware_node|planning_node|slam_node|collect_node|utils_node|log_recorder|rosctl_ser|httpsrv" | grep -v grep | awk '{print $1}'`
+PID=`ps -ef | grep -E "monitor.sh|middleware_node|planning_node|slam_node|collect_node|utils_node|log_recorder|Ota" | grep -v grep | awk '{print $1}'`
 for item  in $PID
 do
 	kill -s 9 $item
@@ -94,12 +93,11 @@ sleep 2
 ${ABSOLUTE_PATH}/bin/planning_node 2>&1 | tee -a $START_LOG_FILE > /dev/null &
 ${ABSOLUTE_PATH}/bin/slam_node 2>&1 | tee -a $START_LOG_FILE > /dev/null &
 ${ABSOLUTE_PATH}/bin/utils_node 2>&1 | tee -a $START_LOG_FILE > /dev/null &
-rosctl_ser 13001 &
-${ABSOLUTE_PATH}/bin/httpsrv &
+${ABSOLUTE_PATH}/bin/Ota 2>&1 | tee -a $START_LOG_FILE > /dev/null &
 
 # 守护进程
 if [ -z "$1" ]; then
-  KEEP_PROGRESS_FLAG="close"
+  KEEP_PROGRESS_FLAG="open"
 else
   KEEP_PROGRESS_FLAG=$1
 fi

@@ -33,7 +33,8 @@ struct Bat_
     , ch_vol(0)
     , charger_ch_cur(0)
     , bat_cycle_times(0)
-    , bat_health_left(0)  {
+    , bat_health_left(0)
+    , disable_charge(0)  {
     }
   Bat_(const ContainerAllocator& _alloc)
     : power(0)
@@ -45,7 +46,8 @@ struct Bat_
     , ch_vol(0)
     , charger_ch_cur(0)
     , bat_cycle_times(0)
-    , bat_health_left(0)  {
+    , bat_health_left(0)
+    , disable_charge(0)  {
   (void)_alloc;
     }
 
@@ -80,6 +82,9 @@ struct Bat_
 
    typedef uint8_t _bat_health_left_type;
   _bat_health_left_type bat_health_left;
+
+   typedef uint8_t _disable_charge_type;
+  _disable_charge_type disable_charge;
 
 
 
@@ -119,7 +124,8 @@ bool operator==(const ::hj_interface::Bat_<ContainerAllocator1> & lhs, const ::h
     lhs.ch_vol == rhs.ch_vol &&
     lhs.charger_ch_cur == rhs.charger_ch_cur &&
     lhs.bat_cycle_times == rhs.bat_cycle_times &&
-    lhs.bat_health_left == rhs.bat_health_left;
+    lhs.bat_health_left == rhs.bat_health_left &&
+    lhs.disable_charge == rhs.disable_charge;
 }
 
 template<typename ContainerAllocator1, typename ContainerAllocator2>
@@ -176,12 +182,12 @@ struct MD5Sum< ::hj_interface::Bat_<ContainerAllocator> >
 {
   static const char* value()
   {
-    return "67beab113d23636ee0599f8ce7cdb781";
+    return "b42cbec002789520117dd16eb5d48425";
   }
 
   static const char* value(const ::hj_interface::Bat_<ContainerAllocator>&) { return value(); }
-  static const uint64_t static_value1 = 0x67beab113d23636eULL;
-  static const uint64_t static_value2 = 0xe0599f8ce7cdb781ULL;
+  static const uint64_t static_value1 = 0xb42cbec002789520ULL;
+  static const uint64_t static_value2 = 0x117dd16eb5d48425ULL;
 };
 
 template<class ContainerAllocator>
@@ -210,6 +216,7 @@ struct Definition< ::hj_interface::Bat_<ContainerAllocator> >
 "int16   charger_ch_cur     #充电端充电电流mA\n"
 "uint16  bat_cycle_times    #电池循环次数\n"
 "uint8   bat_health_left    #电池健康剩余容量\n"
+"uint8   disable_charge     #是否禁止充电\n"
 ;
   }
 
@@ -238,6 +245,7 @@ namespace serialization
       stream.next(m.charger_ch_cur);
       stream.next(m.bat_cycle_times);
       stream.next(m.bat_health_left);
+      stream.next(m.disable_charge);
     }
 
     ROS_DECLARE_ALLINONE_SERIALIZER
@@ -276,6 +284,8 @@ struct Printer< ::hj_interface::Bat_<ContainerAllocator> >
     Printer<uint16_t>::stream(s, indent + "  ", v.bat_cycle_times);
     s << indent << "bat_health_left: ";
     Printer<uint8_t>::stream(s, indent + "  ", v.bat_health_left);
+    s << indent << "disable_charge: ";
+    Printer<uint8_t>::stream(s, indent + "  ", v.disable_charge);
   }
 };
 

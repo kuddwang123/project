@@ -1,7 +1,7 @@
 #include "utils_func.h"
 #include "log_upload.h"
 #include "handle_action.h"
-
+#include "process_cmd.h"
 HJ_REGISTER_FUNCTION(factory) {
   HJ_INFO("minos register factory, funtion_name:%s", FUNCTION_NAME);
   factory.registerCreater<collect_node_utils_func::UtilsFunc>(FUNCTION_NAME);
@@ -61,5 +61,6 @@ UtilsFunc::UtilsFunc(const rapidjson::Value &json_conf) : hj_bf::Function(json_c
   monitor_obj_.Init();
   log_upload::LogUpload::GetInstance();
   collect_handle_action::HandleAction::GetInstance();
+  process_cmd::ProcessCmd::GetInstance();
 }
 }  // namespace collect_node_utils_func

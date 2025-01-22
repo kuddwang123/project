@@ -16,6 +16,9 @@ typedef boost::function<void(int state, int angostate, int ledstate, int basesta
 typedef boost::function<void(int)>
     dlProgressFunc;
 
+typedef boost::function<void(std::string)>
+    buryPointUploadFunc;
+
 enum EndState {
     DOWNLOAD_STATE,
     UNPACK_STATE,
@@ -30,6 +33,20 @@ enum OtaModule {
     baseboard,
     soc,
     ango
+};
+
+enum {
+    BP_OK = 0,
+    BP_UNPACK_FAIL,
+    BP_MCU_LED_OTA_FAIL,
+    BP_MCU_BASE_OTA_FAIL,
+    BP_SOC_OTA_FAIL,
+    BP_INTRRUPT_BY_MANUAL,
+    BP_ALREADY_IN_OTA,
+    BP_FAIL_TO_DL_NO_SPACE,
+    BP_ENTER_OTA_REJECT_BY_MID,
+    BP_DLFAIL_MD5_MISMATCH,
+    BP_DLFAIL_NETWORK_FAIL
 };
 
 typedef struct {

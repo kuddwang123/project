@@ -108,6 +108,7 @@ bool NetConfig::netConfig(const rapidjson::Document& config, uint8_t from, const
     if (state_ != kNONE) {
         HJ_ERROR("current state busy:%d\n", state_);
         sendErrorRptImmedia(3014, from, session);
+        buryPointer_->triggerBigDataRpt(false, NetConfigBuryPoint::kNETCONFIG_ALREADY_INCONFIG);
         return true;
     }
 
@@ -226,9 +227,10 @@ void NetConfig::wifiConnCallBack(const std_msgs::String& msg)
                     sendErrorRpt(3004);
                 }
                 state_ = kNONE;
+                appRouterPtr_->restartIot(false);
             } else {
                 std::thread([&]() {
-                    if(appRouterPtr_->runIot(true)) {
+                    if(appRouterPtr_->restartIot(true)) {
                         iotConnPub(true);
                     }else {
                         iotConnPub(false);
@@ -440,12 +442,11 @@ bool NetConfig::postGetCert(const std::string& url, const std::string& data, con
         return false;
     }
 
-    std::string base64d;
-    try { 
-        base64d = base64_decode(curl.getResponse());
-    } catch (std::exception& e) {
-        HJ_ERROR("catch base64 decode exp:%s\n", e.what());
-        HJ_ERROR("curl response:\n%s\n", curl.getResponseStr());
+    bool base64succ = false;
+    std::string base64d = base64_decode(curl.getResponse(), base64succ);
+
+    if (!base64succ) {
+        HJ_ERROR("base64 decode fail, response:\n%s\n", curl.getResponseStr());
         buryPointer_->triggerBigDataRptWithMsg(false, NetConfigBuryPoint::kAWS_CERTFILE_FAIL, "base64 decode response fail");
         return false;
     }
@@ -533,6 +534,8 @@ bool NetConfig::awsCertStoreAndRunIot(const std::string& data)
             buryPointer_->triggerBigDataRptWithMsg(false, NetConfigBuryPoint::kIOT_CONNECT_FAIL, "aws iot connect fail");
             sendErrorRpt(3009);
             return false;
+        } else {
+            buryPointer_->triggerBigDataRpt(true);
         }
     }
 

@@ -249,9 +249,9 @@ enum class ReportAppStatue {
   STANDBY = 7,        //待机中
   SLEEP = 8,          //休眠中
   ALARM = 9,          //报警中
-  OTA_UPDATING = 10,   // OTA更新中
-  PAIR_NETWORK = 11   // 配网中
-
+  OTA_UPDATING = 10,  // OTA更新中
+  PAIR_NETWORK = 11,  // 配网中
+  SHUTDOWN = 15,      // 关机
 };
 
 } // namespace machine

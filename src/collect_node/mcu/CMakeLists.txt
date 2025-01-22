@@ -14,6 +14,15 @@ elseif(${PROJECT_NUMBER} STREQUAL "T1pro")
   add_definitions(-DHJ_T1pro)
   add_definitions(-DX6)
 endif()
+set(RELEASE_VER "debug" CACHE STRING "debug or release")
+if(${RELEASE_VER} STREQUAL "debug")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+elseif(${RELEASE_VER} STREQUAL "release")
+  add_definitions(-DCONFIG_ENABLE_LOG=4)
+  add_definitions(-DHJ_RELEASE_VER)
+  set(CMAKE_BUILD_TYPE "Release")
+  set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
+endif()
 
 include_directories(include ${catkin_INCLUDE_DIRS})
 include_directories("${HJ_WORKSPACE_PATH}/thirdparty/include")
@@ -23,7 +32,6 @@ link_directories("${HJ_WORKSPACE_PATH}/hj_interface/platforms/${PLATFORM}")
 link_directories("${HJ_WORKSPACE_PATH}/thirdparty/platforms/${PLATFORM}")
 add_definitions(-DFUNCTION_NAME="mcu" -DX6 -DDEBUG)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 catkin_package(CATKIN_DEPENDS message_runtime std_msgs)
 add_library(mcu 
 src/mcu.cpp

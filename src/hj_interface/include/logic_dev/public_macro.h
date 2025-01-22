@@ -22,6 +22,11 @@ const int32_t CLEAN_AREA_DIFF_BETWEEN_APP_AND_MACHINE = 10;  //清洁区域之�
 #define LAST_TASK_FILE_PATH         LOGIC_DIR    "last_task.json"
 // #define LAST_TASK_FILE_PATH         "/tmp/last_task.json"
 
+/******************清洁任务正在运行的文件标志*********************/
+#define TASK_RUNNING_MARK           LOGIC_DIR    "task_running.mark"
+/******************召回正在运行的文件标志*********************/
+#define LAST_CALLBACK_FILE          LOGIC_DIR    "last_callback.json"
+
 /*****************出入水检测宏*********************/
 #define USE_CHECK_WATER_SENSOR
 

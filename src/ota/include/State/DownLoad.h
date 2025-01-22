@@ -19,6 +19,7 @@ public:
     void setDlRptcb(const otaStatusReportFunc& cb) {dlProgressRptFunc_ = cb;}
     void setMode(uint8_t mode) {mode_ = mode;}
     void stop();
+    int getDlResult() const {return dlrst_;};
 
 private:
     std::atomic<bool> isRun_;
@@ -26,6 +27,7 @@ private:
     utils::Curl curlUtil_;
     otaStatusReportFunc dlProgressRptFunc_;
     int progress_;
+    int dlrst_;
 
 private:
     void dlProgress(int progress);
@@ -39,6 +41,7 @@ public:
     bool dowork(const boost::any& para) override;
     work_state getStatus() override;
     void stop();
+    int getDlResult();
 
 private:
     int timeout_;
@@ -48,7 +51,6 @@ private:
     std::string nextVer_;
     uint8_t mode_; //0手动，1自动
     CurlImplPtr curlImpPtr_;
-    //const char* autoDlMark_ = "/userdata/autoOtaDl.mark";
     const char* otaBinFile_ = "/userdata/ota/ota.bin";
     const char* otaTmpDir_ = "/userdata/otatmp/";
 

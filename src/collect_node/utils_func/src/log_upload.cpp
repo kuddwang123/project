@@ -30,11 +30,15 @@ constexpr char kLogUploadTopicName[] = "/getLogRecord";
 constexpr char kLogUploadTempPath[] = "/tmp";
 constexpr char kLogUploadCoreDumpDir[] = "/userdata/hj/log/core_dump";
 constexpr char kLogUploadLogDir[] = "/userdata/hj/log/logging";
+constexpr char kLogUploadLogOtherDir[] = "/userdata/hj/log";
 constexpr char kLogUploadSensorDataDir[] = "/userdata/hj/log/sensor_data_alg";
 constexpr char kLogUploadErrorLog[] = "log_err";
 constexpr char kLogUploadFileTopicName[] = "/upload/file";
 constexpr char kLogUploadDefaultSN[] = "000";
 constexpr char kLogUploadConfigFile[] = "/tmp/devInfo.json";
+constexpr char kLogUploadSocOTAFiles[] = "ota.log";
+constexpr char kLogUploadMcuOTAFiles[] = "mcuota.log";
+constexpr char kLogUploadMapInfoPath[] = "/userdata/hj/maps";
 
 void PrintListName(const std::vector<std::string>& list) {
   HJ_INFO("minos pack file list:");
@@ -94,7 +98,7 @@ bool LogUpload::PackMuc(const std::string& timestamp_str, std::string& pack_name
   boost::filesystem::path directory_path = "/userdata/hj/log/mcukey";
   GetFiles(directory_path, all_file);
   PrintListName(all_file);
-  return hj_bf::CreateZipFileByFiles(pack_name, all_file);
+  return hj_bf::CreateZipFileByFiles(pack_name, all_file, password_);
 }
 bool LogUpload::PackSoc(const std::string& timestamp_str, std::string& pack_name) {
   pack_name = kLogUploadTempPath;
@@ -109,9 +113,8 @@ bool LogUpload::PackSoc(const std::string& timestamp_str, std::string& pack_name
 
   all_file.emplace_back("/etc/version");
   PrintListName(all_file);
-  return hj_bf::CreateZipFileByFiles(pack_name, all_file);
+  return hj_bf::CreateZipFileByFiles(pack_name, all_file, password_);
 }
-
 bool LogUpload::PackMiddleware(const std::string& timestamp_str, std::string& pack_name) {
   pack_name = kLogUploadTempPath;
   pack_name += "/" + timestamp_str + "-Aiper" + LogUpload::GetInstance().GetSn() + "-middleware.zip";
@@ -119,11 +122,14 @@ bool LogUpload::PackMiddleware(const std::string& timestamp_str, std::string& pa
   std::string prefix = "collect_node_";
   boost::filesystem::path directory_path = log_dir_;
   GetFilesWithPrefix(directory_path, all_file, prefix);
+  GetFilesWithPrefix(directory_path, all_file, error_dir_);
   directory_path = core_dump_dir_ + "/dump_collect_node";
   GetFiles(directory_path, all_file);
-  GetFilesWithPrefix(directory_path, all_file, error_dir_);
+  directory_path = log_other_;
+  GetFilesWithPrefix(directory_path, all_file, kLogUploadSocOTAFiles);
+  GetFilesWithPrefix(directory_path, all_file, kLogUploadMcuOTAFiles);
   PrintListName(all_file);
-  return hj_bf::CreateZipFileByFiles(pack_name, all_file);
+  return hj_bf::CreateZipFileByFiles(pack_name, all_file, password_);
 }
 
 bool LogUpload::PackSlam(const std::string& timestamp_str, std::string& pack_name) {
@@ -133,11 +139,11 @@ bool LogUpload::PackSlam(const std::string& timestamp_str, std::string& pack_nam
   std::string prefix = "slam_node_";
   boost::filesystem::path directory_path = log_dir_;
   GetFilesWithPrefix(directory_path, all_file, prefix);
+  GetFilesWithPrefix(directory_path, all_file, error_dir_);
   directory_path = core_dump_dir_ + "/dump_slam_node";
   GetFiles(directory_path, all_file);
-  GetFilesWithPrefix(directory_path, all_file, error_dir_);
   PrintListName(all_file);
-  return hj_bf::CreateZipFileByFiles(pack_name, all_file);
+  return hj_bf::CreateZipFileByFiles(pack_name, all_file, password_);
 }
 
 bool LogUpload::PackPlanning(const std::string& timestamp_str, std::string& pack_name) {
@@ -147,11 +153,13 @@ bool LogUpload::PackPlanning(const std::string& timestamp_str, std::string& pack
   std::string prefix = "planning_node_";
   boost::filesystem::path directory_path = log_dir_;
   GetFilesWithPrefix(directory_path, all_file, prefix);
+  GetFilesWithPrefix(directory_path, all_file, error_dir_);
   directory_path = core_dump_dir_ + "/dump_planning_node";
   GetFiles(directory_path, all_file);
-  GetFilesWithPrefix(directory_path, all_file, error_dir_);
+  directory_path = kLogUploadMapInfoPath;
+  GetFiles(directory_path, all_file);
   PrintListName(all_file);
-  return hj_bf::CreateZipFileByFiles(pack_name, all_file);
+  return hj_bf::CreateZipFileByFiles(pack_name, all_file, password_);
 }
 
 bool LogUpload::PackApp(const std::string& timestamp_str, std::string& pack_name) {
@@ -161,11 +169,11 @@ bool LogUpload::PackApp(const std::string& timestamp_str, std::string& pack_name
   std::string prefix = "middleware_node_";
   boost::filesystem::path directory_path = log_dir_;
   GetFilesWithPrefix(directory_path, all_file, prefix);
+  GetFilesWithPrefix(directory_path, all_file, error_dir_);
   directory_path = core_dump_dir_ + "/dump_middleware_node";
   GetFiles(directory_path, all_file);
-  GetFilesWithPrefix(directory_path, all_file, error_dir_);
   PrintListName(all_file);
-  return hj_bf::CreateZipFileByFiles(pack_name, all_file);
+  return hj_bf::CreateZipFileByFiles(pack_name, all_file, password_);
 }
 
 bool LogUpload::PackUtils(const std::string& timestamp_str, std::string& pack_name) {
@@ -175,17 +183,17 @@ bool LogUpload::PackUtils(const std::string& timestamp_str, std::string& pack_na
   std::string prefix = "utils_node_";
   boost::filesystem::path directory_path = log_dir_;
   GetFilesWithPrefix(directory_path, all_file, prefix);
+  GetFilesWithPrefix(directory_path, all_file, error_dir_);
   directory_path = core_dump_dir_ + "/dump_utils_node";
   GetFiles(directory_path, all_file);
-  GetFilesWithPrefix(directory_path, all_file, error_dir_);
   PrintListName(all_file);
-  return hj_bf::CreateZipFileByFiles(pack_name, all_file);
+  return hj_bf::CreateZipFileByFiles(pack_name, all_file, password_);
 }
 
 bool LogUpload::PackSensorData(const std::string& timestamp_str, std::string& pack_name) {
   pack_name = kLogUploadTempPath;
   pack_name += "/" + timestamp_str + "-Aiper" + LogUpload::GetInstance().GetSn() + "-sensor_data.zip";
-  return hj_bf::CreateZipFileByDir(pack_name, sensor_data_);
+  return hj_bf::CreateZipFileByDir(pack_name, sensor_data_, password_);
 }
 
 bool LogUpload::PackAll(const std::string& timestamp_str, std::string& pack_name) {
@@ -204,8 +212,10 @@ bool LogUpload::PackAll(const std::string& timestamp_str, std::string& pack_name
   all_file.emplace_back("/etc/version");
   directory_path = core_dump_dir_;
   GetFiles(directory_path, all_file);
+  directory_path = kLogUploadMapInfoPath;
+  GetFiles(directory_path, all_file);
   PrintListName(all_file);
-  return hj_bf::CreateZipFileByFiles(pack_name, all_file);
+  return hj_bf::CreateZipFileByFiles(pack_name, all_file, password_);
 }
 
 bool LogUpload::Pack(enum LogUploadTypes type, std::string& pack_name) {
@@ -258,6 +268,8 @@ LogUpload::LogUpload() {
   log_dir_ = kLogUploadLogDir;
   error_dir_ = kLogUploadErrorLog;
   sensor_data_ = kLogUploadSensorDataDir;
+  password_ = ZIP_PASSWORD;
+  log_other_ = kLogUploadLogOtherDir;
   upload_file_cmd_sub_ = hj_bf::HJSubscribe(log_upload::kLogUploadTopicName, 10, &LogUpload::GetCmdCallback, this);
   std::thread process_thread(&LogUpload::UploadProcesser, this);
   process_thread.detach();
@@ -271,18 +283,18 @@ void LogUpload::UploadProcesser() {
   }
   uint64_t log_id = 0;
   std::vector<int> types;
-  std::unique_lock<std::mutex> weakup_lk(queue_cond_mutex_);
+  std::unique_lock<std::mutex> lk(queue_mutex_);
   std::deque<hj_interface::AppData> temp_deque;
   while (true) {
     //    std::cv_status::timeout == queue_cond_.wait_for(weakup_lk, std::chrono::minutes(kProcessTimeoutMinutes));
-    queue_cond_.wait_for(weakup_lk, std::chrono::minutes(kProcessTimeoutMinutes));
-    HJ_INFO("trigger queue_cond_");
+    queue_cond_.wait_for(lk, std::chrono::minutes(kProcessTimeoutMinutes));
     if (exit_flag_ == true) {
       return;
     }
     while (!deque_.empty()) {
       temp_deque.swap(deque_);
-      weakup_lk.unlock();
+      lk.unlock();
+      HJ_INFO("UploadProcesser !deque_.empty()");
       while (!temp_deque.empty()) {
         hj_interface::AppData temp = temp_deque.front();
         temp_deque.pop_front();
@@ -295,7 +307,7 @@ void LogUpload::UploadProcesser() {
           HJ_ERROR("ParseMsg error");
         }
       }
-      weakup_lk.lock();
+      lk.lock();
     }
   }
 }
@@ -304,6 +316,7 @@ void LogUpload::GetCmdCallback(const hj_interface::AppData::ConstPtr& msg) {
   HJ_INFO("GetCmdCallback");
   std::unique_lock<std::mutex> lk(queue_mutex_);
   deque_.emplace_back(*msg);
+  lk.unlock();
   queue_cond_.notify_one();
 }
 

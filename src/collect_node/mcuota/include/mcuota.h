@@ -20,9 +20,11 @@ using namespace hj_bf;
 
 #define MCU_MAIN_BOARD 0
 #define MCU_LAMP_BOARD 1
+#define MCU_ANGO_BOARD 2
 #define OTA_ACK_ID 0X701
 #define OTA_MCU_DATA_ID 0x703
 #define OTA_LAMP_DATA_ID 0x705
+#define OTA_ANGO_DATA_ID 0x707
 #define MCU_REQ_FIRMINFO_CMD 0x01
 #define SOC_SEND_FIRMINFO_CMD 0x02
 #define MCU_REQ_BINDATA_CMD 0x05
@@ -38,7 +40,8 @@ using namespace hj_bf;
 enum ota_type {
   CHARGER = 1,
   LAMPBOARD = 2,
-  MCU = 3
+  MCU = 3,
+  ANGO = 5
 };
 
 #define UINT32_TO_BUF_LITTLE(data, buf)                   \

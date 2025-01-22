@@ -3,6 +3,7 @@
 #include "State/UnPack.h"
 #include "State/Upgrade.h"
 #include "State/End.h"
+#include "BuryPoint.h"
 #include "std_msgs/UInt8.h"
 #include "std_msgs/String.h"
 #include "nlohmann/json.hpp"
@@ -37,12 +38,15 @@ private:
     ros::Publisher otaAppResPub_;
     ros::Publisher otaEnterPub_;
     ros::Publisher otaQuitPub_;
+    ros::Publisher otaSucTrigerLogPub_;
+    ros::Publisher buryPointPub_;
     
     DownloadPtr dowloadPtr_;
     UnPackPtr unpackPtr_;
     UpgradePtr upGradePtr_;
     EndPtr_ endPtr_;
 
+    BuryPoint bp_;
     std::string sn_;
     std::string socVer_;
     int mode_;
@@ -77,6 +81,7 @@ private:
     void doAutoOta();
     void doRollBackOta();
     void reportAppMsgCache();
+    void uploadBuryPoint(std::string data);
     void urlOtaResp(const hj_interface::AppMsg& appMsg, int res);
 };
 }//namespace aiper_ota
