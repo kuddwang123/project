@@ -26,6 +26,7 @@
 #include "node_factory.h"
 #include "shm.h"
 #include "shm_interface.h"
+#include "hj_utils.h"
 namespace big_data {
 
 constexpr int kProcessTimeoutMinutes = 10;
@@ -86,18 +87,18 @@ BigdataCollection& g_instance_ptr = big_data::BigdataCollection::GetInstance();
 
 static inline hj_bf::HJPublisher& PubMqttInstance() {
   static hj_bf::HJPublisher big_data_pub_mqtt =
-      hj_bf::HJAdvertise<hj_interface::AppMsg>(kBigdataReportAppTopicName, 10);
+      hj_bf::HJAdvertise<hj_interface::AppMsg>(kBigdataReportAppTopicName, 10, true);
   return big_data_pub_mqtt;
 }
 
 static inline hj_bf::HJPublisher& PubSaveInstance() {
   static hj_bf::HJPublisher big_data_pub_save =
-      hj_bf::HJAdvertise<hj_interface::BigDataSave>(kBigdataSaveTopicName, 10);
+      hj_bf::HJAdvertise<hj_interface::BigDataSave>(kBigdataSaveTopicName, 10, true);
   return big_data_pub_save;
 }
 static inline hj_bf::HJPublisher& PubS3FileInstance() {
   static hj_bf::HJPublisher big_data_pub_s3 =
-      hj_bf::HJAdvertise<hj_interface::FileUpload>(kBigdataUploadFileTopicName, 10);
+      hj_bf::HJAdvertise<hj_interface::FileUpload>(kBigdataUploadFileTopicName, 10, true);
   return big_data_pub_s3;
 }
 
@@ -130,7 +131,7 @@ void InsertBigdata(const std::string& value, const std::string& param, uint8_t c
   }
   static bool online_status = false;
   hj_bf::getVariable(kIotOnlineStatus, online_status);
-  //  HJ_INFO("InsertBigdata value:%s, cmd:%d, param:%s", value.c_str(), cmd, param.c_str());
+  HJ_INFO("InsertBigdata value:%s, cmd:%d, param:%s", value.c_str(), cmd, param.c_str());
   if (IsImmediate(cmd) && online_status) {
     hj_interface::AppData temp_data;
     temp_data.key = kBigdataKey;
@@ -140,14 +141,14 @@ void InsertBigdata(const std::string& value, const std::string& param, uint8_t c
     temp_msg.appdata.push_back(temp_data);
     temp_msg.to = hj_interface::AppMsg::BIGDATA;
     PubMqttInstance().publish(temp_msg);
-    // HJ_INFO("InsertBigdata pub immediate");
+    HJ_INFO("InsertBigdata pub immediate");
   } else {
     hj_interface::BigDataSave temp_data;
     temp_data.key = kBigdataKey;
     temp_data.payload = value;
     temp_data.cmd = cmd;
     PubSaveInstance().publish(temp_data);
-    // HJ_INFO("InsertBigdata pub save");
+    HJ_INFO("InsertBigdata pub save");
   }
   if (IsPack(cmd)) {
     hj_interface::FileUpload temp_path;
@@ -254,6 +255,8 @@ void BigdataCollection::SendImmediateItems() {
     temp_msg.to = hj_interface::AppMsg::BIGDATA;
     PubMqttInstance().publish(temp_msg);
     HJ_INFO("SendImmediateItems json:%s", payload_temp.c_str());
+    std::cerr<<RECORD_TIMESTAMP<<" SendImmediateItems json:"<<payload_temp<<std::endl;
+
   }
 }
 
