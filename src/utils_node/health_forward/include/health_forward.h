@@ -14,6 +14,7 @@
 #include "node_factory.h"
 #include "status_code.h"
 #include "node_cache.h"
+#include "std_msgs/String.h"
 
 namespace utils_node_health_forward {  // your namespace
 
@@ -23,8 +24,14 @@ class HealthForward : public hj_bf::Function {
   explicit HealthForward(const rapidjson::Value &json_conf);
   ~HealthForward();
  private:
-  hj_bf::HJPublisher big_data_pub_;
+  void TaskNameCallBack(const std_msgs::String::ConstPtr& msg);
   bool pubBigDataCallback(hj_interface::HealthCheckCodeRequest& req, hj_interface::HealthCheckCodeResponse& res);
+ private:
+  std::mutex mtx_;
+  std::string task_name_;
+  ros::Publisher big_data_pub_;
+  hj_bf::HJSubscriber task_name_sub_;
+  ros::NodeHandle nh_;
 };
 }  // namespace utils_node_health_forward
 

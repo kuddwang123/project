@@ -126,6 +126,7 @@ class HJServer {
 
 class HJTimer {
  public:
+
   HJTimer(const double us, const std::shared_ptr<ros::Timer>& timer, const std::string& name)
       : duration_(us), timer_ptr_(timer), name_(name) {}
   HJTimer() {}

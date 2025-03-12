@@ -6,6 +6,7 @@
 #include "hj_interface/WifiSet.h"
 #include "base64/base64.h"
 #include "hj_interface/SysAction.h"
+#include <std_msgs/Int32.h>
 #include <boost/filesystem.hpp>
 #include <fstream>
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -94,6 +95,9 @@ void AppCommunication::initialize()
     inwaterSub_ = hj_bf::HJSubscribe("/water_inspection", 1, &AppCommunication::inWaterCb, this);
 
     cmdProcessPub_ = hj_bf::HJAdvertise<hj_interface::AppData>("/cmd_process", 5);
+
+    w2BindPub_ = hj_bf::HJAdvertise<std_msgs::Int32>("/w2/bind", 1);
+
     initIot();
 }
 
@@ -134,6 +138,7 @@ void AppCommunication::collectNodeResetCb(const hj_interface::CollectBroadcast::
     HJ_INFO("iot receive reset, act:%d\n", msg->action);
     if (msg->action == hj_interface::SysAction::SYS_ACTION_RESTORE_FACTORY) {
         HJ_INFO("iot factory reset\n");
+        disableAngo();
         iotFactoryReset();
         Persistence::instance().reset();
         HJ_INFO("iot factory reset done\n");
@@ -150,6 +155,13 @@ void AppCommunication::collectNodeResetCb(const hj_interface::CollectBroadcast::
     response_msg.ack = 0;
     response_msg.function = 0;
     resetResPub_.publish(response_msg);
+}
+
+void AppCommunication::disableAngo()
+{
+    HJ_INFO("pub w2 unbind\n");
+    std_msgs::Int32 msg;
+    w2BindPub_.publish(msg);
 }
 
 void AppCommunication::iotFactoryReset()
@@ -356,6 +368,8 @@ bool AppCommunication::appDataHandler(const hj_interface::AppMsg& appmsg)
             appdata.payload = utils::documentToString(respDoc);
             respmsg.appdata.emplace_back(appdata);
             appDataRouterPtr_->sendAppResp(respmsg);
+            disableAngo();
+
             sleep(2);
             iotFactoryReset();
 
@@ -369,6 +383,20 @@ bool AppCommunication::appDataHandler(const hj_interface::AppMsg& appmsg)
         } else if (msg.key == "switchLog") {
             HJ_INFO("%s receive!\n", msg.key.c_str());
             cmdProcessPub_.publish(msg);
+            dealtcnt++;
+        } else if (msg.key == "W2Bind") {
+            HJ_INFO("%s receive!\n", msg.key.c_str());
+            rapidjson::Document doc;
+            if (!doc.Parse(msg.payload.data()).HasParseError()) {
+                if (doc.HasMember("bind") && doc["bind"].IsInt()) {
+                    int mode = doc["bind"].GetInt();
+                    HJ_INFO("pub w2 bind:%d\n", mode);
+                    std_msgs::Int32 msg;
+                    msg.data = mode;
+                    w2BindPub_.publish(msg);
+                }
+            }
+            dealtcnt++;
         }
     }
 

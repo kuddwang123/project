@@ -27,7 +27,9 @@ class UtilsFunc : public hj_bf::Function {
  public:
   explicit UtilsFunc(const rapidjson::Value &json_conf);
   ~UtilsFunc();
+  void InitProcess();
  private:
+  hj_bf::HJPublisher w2_switch_pub_;
   Monitor monitor_obj_;
   RecordMsg record_msg_obj_;
   RecordMsgLasting record_msg_lasting_obj_;

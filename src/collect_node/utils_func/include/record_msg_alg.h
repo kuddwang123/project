@@ -13,6 +13,8 @@
 #include <string>
 #include <thread>
 #include <mutex>
+#include <sstream>
+#include <fstream>
 #include "function_factory.h"
 #include "node_factory.h"
 #include "hj_zip.h"
@@ -87,25 +89,25 @@ class RecordMsg {
   std::atomic<bool> space_enabled_{true};  // true: 空间足够  false: 空间不足
   std::string cur_log_path_{"/userdata/hj/log/sensor_data_alg"};
   int space_limit_{30};  // 磁盘空间最小要求，MB
-  int fd_motor_{-1};
-  int fd_imu_{-1};
-  int fd_motor_time_{-1};
-  int fd_imu_time_{-1};
-  int fd_triple_ultra_{-1};
-  int fd_mag_{-1};
-  int fd_nav_{-1};
-  int fd_pressure_{-1};
-  int fd_left_back_{-1};
-  int fd_left_front_{-1};
-#ifdef HJ_T1pro
-  int fd_down_ray_{-1};
-  int fd_tof_{-1};
-#else
-  int fd_down_left_{-1};
-  int fd_down_right_{-1};
-#endif
   void* motor_cur_logger_{nullptr};
   void* wireless_charging_logger_{nullptr};
+  std::ofstream stream_imu_;
+  std::ofstream stream_motor_;
+  std::ofstream stream_motor_time_;
+  std::ofstream stream_imu_time_;
+  std::ofstream stream_triple_ultra_;
+  std::ofstream stream_mag_;
+  std::ofstream stream_nav_;
+  std::ofstream stream_pressure_;
+  std::ofstream stream_left_back_;
+  std::ofstream stream_left_front_;
+#ifdef HJ_T1pro
+  std::ofstream stream_down_ray_;
+  std::ofstream stream_tof_;
+#else
+  std::ofstream stream_down_left_;
+  std::ofstream stream_down_right_;
+#endif
   std::string log_prefix_;
   std::mutex mtx_;
 

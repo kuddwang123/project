@@ -5,7 +5,7 @@
 #define LOG_USE_ROS 1
 #define LOG_USE_LOG4CXX 2
 #define LOG_USE_NONE 3
-#define LOG_USE_RELEASE_OLD 4 //steall open
+#define LOG_USE_RELEASE_OLD 4  // steall open
 #define LOG_USE_RELEASE 5
 
 #ifndef CONFIG_ENABLE_LOG
@@ -15,42 +15,48 @@
 #define HJ_DEBUG(...) ROS_DEBUG(__VA_ARGS__)
 #define HJ_INFO(...) ROS_INFO(__VA_ARGS__)
 #define HJ_WARN(...) ROS_WARN(__VA_ARGS__)
-#define HJ_ERROR(...)           \
-  ROS_ERROR(__VA_ARGS__);       \
-  fprintf(stderr, __VA_ARGS__); \
-  fprintf(stderr, "\r\n")
-#define HJ_EFATAL(...)          \
-  ROS_FATAL(__VA_ARGS__);       \
-  fprintf(stderr, __VA_ARGS__); \
-  fprintf(stderr, "\r\n")
-#define HJ_IMPORTANT(...)           \
-  ROS_INFO(__VA_ARGS__);       \
-  fprintf(stderr, __VA_ARGS__); \
-  fprintf(stderr, "\r\n")
+#define HJ_ERROR(...)             \
+  do {                            \
+    ROS_ERROR(__VA_ARGS__);       \
+    fprintf(stderr, __VA_ARGS__); \
+    fprintf(stderr, "\r\n");      \
+  } while (false)
+#define HJ_EFATAL(...)            \
+  do {                            \
+    ROS_FATAL(__VA_ARGS__);       \
+    fprintf(stderr, __VA_ARGS__); \
+    fprintf(stderr, "\r\n");      \
+  } while (false)
+#define HJ_IMPORTANT(...)         \
+  do {                            \
+    ROS_INFO(__VA_ARGS__);        \
+    fprintf(stderr, __VA_ARGS__); \
+    fprintf(stderr, "\r\n");      \
+  } while (false)
 #define HJ_DEBUG_STREAM(args) ROS_DEBUG_STREAM(args)
 #define HJ_INFO_STREAM(args) ROS_INFO_STREAM(args)
 #define HJ_WARN_STREAM(args) ROS_WARN_STREAM(args)
-#define HJ_ERROR_STREAM(args) \
-  ROS_ERROR_STREAM(args);     \
-  std::cerr << args << std::endl
-#define HJ_EFATAL_STREAM(args) \
-  ROS_FATAL_STREAM(args);     \
-  std::cerr << args << std::endl
-#define HJ_IMPORTANT_STREAM(args) \
-  ROS_INFO_STREAM(args);      \
-  std::cerr << args << std::endl
+#define HJ_ERROR_STREAM(args)       \
+  do {                              \
+    ROS_ERROR_STREAM(args);         \
+    std::cerr << args << std::endl; \
+  } while (false)
+#define HJ_EFATAL_STREAM(args)      \
+  do {                              \
+    ROS_FATAL_STREAM(args);         \
+    std::cerr << args << std::endl; \
+  } while (false)
+#define HJ_IMPORTANT_STREAM(args)   \
+  do {                              \
+    ROS_INFO_STREAM(args);          \
+    std::cerr << args << std::endl; \
+  } while (false)
 
 #define HJ_DEBUG_THROTTLE(...) ROS_DEBUG_THROTTLE(__VA_ARGS__)
 #define HJ_INFO_THROTTLE(...) ROS_INFO_THROTTLE(__VA_ARGS__)
 #define HJ_WARN_THROTTLE(...) ROS_WARN_THROTTLE(__VA_ARGS__)
-#define HJ_ERROR_THROTTLE(...)     \
-  ROS_ERROR_THROTTLE(__VA_ARGS__); \
-  fprintf(stderr, __VA_ARGS__);    \
-  fprintf(stderr, "\r\n")
-#define HJ_EFATAL_THROTTLE(...)    \
-  ROS_FATAL_THROTTLE(__VA_ARGS__); \
-  fprintf(stderr, __VA_ARGS__);    \
-  fprintf(stderr, "\r\n")
+#define HJ_ERROR_THROTTLE(...) ROS_ERROR_THROTTLE(__VA_ARGS__)
+#define HJ_EFATAL_THROTTLE(...) ROS_FATAL_THROTTLE(__VA_ARGS__)
 
 //#define HJ_DEBUG_STREAM_THROTTLE(args) ROS_DEBUG_STREAM_THROTTLE(args)
 //#define HJ_INFO_STREAM_THROTTLE(args) ROS_INFO_STREAM_THROTTLE(args)
@@ -58,12 +64,14 @@
 //#define HJ_ERROR_STREAM_THROTTLE(args) ROS_ERROR_STREAM_THROTTLE(args)
 //#define HJ_EFATAL_STREAM_THROTTLE(args) ROS_FATAL__STREAM_THROTTLE(args)
 
-#define _CHECK2(expr, msg) do{\
-if(!(expr)){\
-    std::stringstream ss_msg_fatal;\
-    ss_msg_fatal << "Check failed: " << #expr << " @ " << __FILE__ << ":" << __LINE__ << "\n" << msg;\
-    throw std::runtime_error(ss_msg_fatal.str());\
-}}while(0)
+#define _CHECK2(expr, msg)                                                                              \
+  do {                                                                                                  \
+    if (!(expr)) {                                                                                      \
+      std::stringstream ss_msg_fatal;                                                                   \
+      ss_msg_fatal << "Check failed: " << #expr << " @ " << __FILE__ << ":" << __LINE__ << "\n" << msg; \
+      throw std::runtime_error(ss_msg_fatal.str());                                                     \
+    }                                                                                                   \
+  } while (0)
 
 #endif
 #if CONFIG_ENABLE_LOG == LOG_USE_NONE
@@ -107,51 +115,55 @@ if(!(expr)){\
 #define HJ_DEBUG(...)
 #define HJ_INFO(...)
 #define HJ_WARN(...)
-#define HJ_ERROR(...)           \
-  ROS_ERROR(__VA_ARGS__);       \
-  fprintf(stderr, __VA_ARGS__); \
-  fprintf(stderr, "\r\n")
-#define HJ_EFATAL(...)          \
-  ROS_FATAL(__VA_ARGS__);       \
-  fprintf(stderr, __VA_ARGS__); \
-  fprintf(stderr, "\r\n")
-#define HJ_IMPORTANT(...)           \
-  fprintf(stderr, __VA_ARGS__); \
-  fprintf(stderr, "\r\n")
+#define HJ_ERROR(...)             \
+  do {                            \
+    ROS_ERROR(__VA_ARGS__);       \
+    fprintf(stderr, __VA_ARGS__); \
+    fprintf(stderr, "\r\n");      \
+  } while (false)
+#define HJ_EFATAL(...)            \
+  do {                            \
+    ROS_FATAL(__VA_ARGS__);       \
+    fprintf(stderr, __VA_ARGS__); \
+    fprintf(stderr, "\r\n");      \
+  } while (false)
+#define HJ_IMPORTANT(...)         \
+  do {                            \
+    fprintf(stderr, __VA_ARGS__); \
+    fprintf(stderr, "\r\n");      \
+  } while (false)
 #define HJ_DEBUG_STREAM(args)
 #define HJ_INFO_STREAM(args)
 #define HJ_WARN_STREAM(args)
-#define HJ_ERROR_STREAM(args) \
-  ROS_ERROR_STREAM(args);     \
-  std::cerr << args << std::endl
-#define HJ_EFATAL_STREAM(args) \
-  ROS_FATAL_STREAM(args);     \
-  std::cerr << args << std::endl
-#define HJ_IMPORTANT_STREAM(args) \
-  std::cerr << args << std::endl
+#define HJ_ERROR_STREAM(args)       \
+  do {                              \
+    ROS_ERROR_STREAM(args);         \
+    std::cerr << args << std::endl; \
+  } while (false)
+#define HJ_EFATAL_STREAM(args)      \
+  do {                              \
+    ROS_FATAL_STREAM(args);         \
+    std::cerr << args << std::endl; \
+  } while (false)
+#define HJ_IMPORTANT_STREAM(args) std::cerr << args << std::endl
 
 #define HJ_DEBUG_THROTTLE(...)
 #define HJ_INFO_THROTTLE(...)
 #define HJ_WARN_THROTTLE(...)
-#define HJ_ERROR_THROTTLE(...)     \
-  ROS_ERROR_THROTTLE(__VA_ARGS__); \
-  fprintf(stderr, __VA_ARGS__);    \
-  fprintf(stderr, "\r\n")
-#define HJ_EFATAL_THROTTLE(...)    \
-  ROS_FATAL_THROTTLE(__VA_ARGS__); \
-  fprintf(stderr, __VA_ARGS__);    \
-  fprintf(stderr, "\r\n")
+#define HJ_ERROR_THROTTLE(...) ROS_ERROR_THROTTLE(__VA_ARGS__)
+#define HJ_EFATAL_THROTTLE(...) ROS_FATAL_THROTTLE(__VA_ARGS__)
 
-#define _CHECK2(expr, msg) do{\
-if(!(expr)){\
-    std::stringstream ss_msg_fatal;\
-    ss_msg_fatal << "Check failed: " << #expr << " @ " << __FILE__ << ":" << __LINE__ << "\n" << msg;\
-    throw std::runtime_error(ss_msg_fatal.str());\
-}}while(0)
+#define _CHECK2(expr, msg)                                                                              \
+  do {                                                                                                  \
+    if (!(expr)) {                                                                                      \
+      std::stringstream ss_msg_fatal;                                                                   \
+      ss_msg_fatal << "Check failed: " << #expr << " @ " << __FILE__ << ":" << __LINE__ << "\n" << msg; \
+      throw std::runtime_error(ss_msg_fatal.str());                                                     \
+    }                                                                                                   \
+  } while (0)
 
 #endif
 #define HJ_CHECK1(expr) _CHECK2(expr, "")
-
 
 #define HJ_CHECK_EQ3(lhs, rhs, msg) _CHECK2((lhs) == (rhs), msg)
 #define HJ_CHECK_NE3(lhs, rhs, msg) _CHECK2((lhs) != (rhs), msg)

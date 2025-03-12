@@ -3,7 +3,7 @@ project(core_dump)
 set (CMAKE_CXX_STANDARD 14)
 set( HJ_WORKSPACE_PATH "..")
 set(PLATFORM "amd64" CACHE STRING "amd64, i386, arm64_rk, etc.")
-#SET( CMAKE_CXX_FLAGS "-g")
+SET( CMAKE_CXX_FLAGS "-g")
 find_package(catkin REQUIRED COMPONENTS rostime roscpp)
 if(${RELEASE_VER} STREQUAL "debug")
 

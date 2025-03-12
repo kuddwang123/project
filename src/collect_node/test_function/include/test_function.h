@@ -21,6 +21,8 @@ class TestLoadSo : public hj_bf::Function {
   void callback1_for_steady(const hj_bf::HJSteadyTimerEvent &);
   void callbackNormal();
   int loopPrint();
+  void loopPrint1();
+  void loopPrint2();
  private:
   hj_bf::HJPublisher test_pub_;
   hj_bf::HJPublisher test_pub2_;
@@ -41,7 +43,7 @@ class TestLoadSo : public hj_bf::Function {
   hj_bf::HighResolutionTimer timer_h_;
   hj_bf::HJClient client1;
   hj_bf::HJClient client2;
-  
+  std::mutex pub_mutex_;
   int test_index_{0};
 };
 }  // namespace test_load_so

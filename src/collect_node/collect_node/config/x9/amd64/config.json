@@ -18,11 +18,11 @@
         "err_log_file_path": "/tmp/logging",
         "cout_log_file_path": ""
       },
-      {
-        "ID": "utils_func",
-        "name": "utils_func",
-        "test_transmit": "well come utils_func"
-      },
+      // {
+      //   "ID": "utils_func",
+      //   "name": "utils_func",
+      //   "test_transmit": "well come utils_func"
+      // },
       // {
       //   "ID": "ulsound",
       //   "name": "ulsound",
@@ -55,6 +55,10 @@
       {
         "ID": "test_load_so",
         "name": "test_load_so"
+      },
+      {
+        "ID": "test_api",
+        "name": "test_api"
       }
   ]
 }

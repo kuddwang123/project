@@ -40,6 +40,7 @@ class AppCommunication : public hj_bf::Function {
     hj_bf::HJPublisher toMidPub_;
     hj_bf::HJPublisher otaPub_;
     hj_bf::HJPublisher cmdProcessPub_;
+    hj_bf::HJPublisher w2BindPub_;
     std::string certdir_;
     std::string certfile_;
     std::string certfilename_;
@@ -58,6 +59,7 @@ class AppCommunication : public hj_bf::Function {
     void iotFactoryReset();
     bool isCertFileExist();
     void pubAppUnbindToMid();
+    void disableAngo();
     std::string timeZoneSet(const std::string& timeStr, const std::string& timeZoneOffset);
 };
 

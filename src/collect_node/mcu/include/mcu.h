@@ -48,6 +48,7 @@
 #include "std_msgs/Bool.h"
 #include "std_msgs/UInt8.h"
 #include "std_msgs/String.h"
+#include "std_msgs/Int32.h"
 #include "std_msgs/UInt8MultiArray.h"
 
 // #define MSG_DEBUG 0
@@ -117,6 +118,7 @@
 #define BOOT_TYPE_RES 0x55
 #define LOWPOWER_CTL_ACK 0x53
 #define ANGO_ENABLE_ID 0x88
+#define ANGO_CTL_ACK 0x8F
 #define FACTORYMODULEACK 0x101
 #define FACTORYAIRBAGCTRLACK 0x103
 #ifdef HJ_T1pro
@@ -594,6 +596,7 @@ class McuImpl {
     std::string dev_;
     bool isRun_;
     bool factory_restored_falg_{false};  //  false: not restored, true: restored
+    std::mutex cfgWrMtx_;
     uint8_t motor_health_ack_;
     uint8_t imu_health_ack_;
     uint8_t bms_health_ack_;
@@ -656,6 +659,7 @@ class McuImpl {
     hj_bf::HJSubscriber sub_factory_module_;
     hj_bf::HJSubscriber sub_factory_airbag_;
     hj_bf::HJSubscriber sub_collect_action_;
+    hj_bf::HJSubscriber sub_w2bind_;
   #ifdef X6
     hj_bf::HJSubscriber sub_x6pump_;
   #endif
@@ -669,6 +673,7 @@ class McuImpl {
     hj_bf::HJTimer wokeModeAngoTmr_;
     hj_bf::HJTimer getBootTypeTmr_;
     hj_bf::HJTimer getBootTimeTmr_;
+    hj_bf::HJTimer loadMcuConfigTmr_;
     std::thread dealUartThred_;
 
     toAngoRobotState toAngoState_;
@@ -690,6 +695,7 @@ class McuImpl {
     SensorCtl keyBlockCtl_;
     SensorCtl imuResetCtl_;
     SensorCtl chargeCtl_;
+    SensorCtl angoCtl_;
 
   private:
     void motor_set_chatterCallback(const hj_interface::Nav::ConstPtr&);
@@ -703,6 +709,7 @@ class McuImpl {
     void workModeToAngo(const hj_bf::HJTimerEvent&);
     void getBootTypeCb(const hj_bf::HJTimerEvent&);
     void getBootTimeCb(const hj_bf::HJTimerEvent&);
+    void loadMcuConfigDelay(const hj_bf::HJTimerEvent&);
     void airbagCb(const hj_interface::AirBag::ConstPtr&);
     void steerPumpCb(const hj_interface::SteerAndPump::ConstPtr&);
     void flipCoverCb(const hj_interface::FlipCover::ConstPtr&);
@@ -717,6 +724,8 @@ class McuImpl {
     void factoryModuleCb(const std_msgs::UInt8::ConstPtr&);
     void factoryAirbagCb(const hj_interface::AirBagFactoty::ConstPtr&);
     void factoryRestroedCb(const hj_interface::CollectBroadcast &);
+    void w2BindStateCb(const std_msgs::Int32::ConstPtr&);
+    void angoCtl(uint8_t);
 
   #ifdef X6
     void x6pumpCb(const hj_interface::X6Pump::ConstPtr&);
@@ -725,8 +734,9 @@ class McuImpl {
     void beatMcu();
     void dealUartLoop();
     bool AllProcessIsExist();
-    void ModuleRebootTimer(const hj_bf::HJTimerEvent&);
+    bool saveMcuConfig(rapidjson::Document&, const std::string&);
 
+    void ModuleRebootTimer(const hj_bf::HJTimerEvent&);
     void dealButtonCmdJsonFromMid(const rapidjson::Value&);
     void dealRemoteCtlJsonFromMid(const rapidjson::Value&);
     void dealLightCtlJsonFromMid(const rapidjson::Value&);
@@ -759,7 +769,8 @@ class Mcu : public hj_bf::Function {
   public:
     explicit Mcu(const rapidjson::Value& json_conf);
     ~Mcu();
-  
+    static std::string kConfigFilePrefix_;
+
   private:
     McuImpl* mcuImpl_;
 };

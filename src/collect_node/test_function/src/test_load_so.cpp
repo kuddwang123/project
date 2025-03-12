@@ -91,7 +91,13 @@ class TestClassFun {
     }
 };
 
-void chatterCallback(const std_msgs::String::ConstPtr& msg) { ROS_INFO("I heard: [%s]", msg->data.c_str()); }
+void chatterCallback(const std_msgs::String::ConstPtr& msg) { 
+  ROS_INFO("I heard: [%s]", msg->data.c_str()); 
+  static int i = 0;
+  i ++;
+  if(i%100 == 0)
+    HJ_ERROR("minos tets"); 
+}
 
 bool add(collect_node::TwoInts::Request& req, collect_node::TwoInts::Response& res) {
   res.sum = req.a + req.b;
@@ -429,12 +435,56 @@ int TestLoadSo::loopPrint() {
       ROS_ERROR("Failed to call service loopPrint");
     }
     HJ_ERROR("minos HJ_ERROR 1:");
-    crash();
-    HJ_ERROR("minos HJ_ERROR 2:");
+      // crash();
+      // abort();
+    rapidjson::Document doc;
+    doc.SetObject();
+    doc.AddMember("ble", 1, doc.GetAllocator());
+    rapidjson::Value key("12", doc.GetAllocator());
+    std::string test_json = R"({
+          "logVersion": "release"
+        })";
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    doc.Accept(writer);
+    // throw std::runtime_error("This is an unhandled exception!");
+    //assert(false); // 断言失败，产生 SIGABRT
+    HJ_ERROR("minos HJ_ERROR 2:%s",buffer.GetString());
     // raise(SIGILL);
   }
 }
+boost::mutex g_init_mutex_test;
+void wait_sleep(){
+  boost::mutex::scoped_lock lock(g_init_mutex_test);
+  sleep(2);
+}
+void TestLoadSo::loopPrint1() {
+  while (1) {
+        std::mutex* test_ll = nullptr;
+    std::unique_lock<std::mutex> test_lock(*test_ll);
 
+    test_ll->lock();
+    std::cerr << "minos loopPrint1 1" << std::endl;
+
+    sleep(1);
+    std::cerr << "minos loopPrint1 2" << std::endl;
+  boost::mutex::scoped_lock lock(g_init_mutex_test);
+  sleep(2);
+    std::cerr << "minos loopPrint1 3" << std::endl;
+  }
+}
+
+void TestLoadSo::loopPrint2() {
+  while (1) {
+  boost::mutex::scoped_lock lock(g_init_mutex_test);
+  sleep(2);
+    std::cerr << "minos loopPrint2 1" << std::endl;
+    std::lock_guard<std::mutex> test_lock(pub_mutex_);
+    std::cerr << "minos loopPrint2 2" << std::endl;
+    sleep(1);
+    std::cerr << "minos loopPrint2 3" << std::endl;
+  }
+}
 // int loopPrint2() {
 
 //   hj_bf::MinosCondition my_condition("test_condition");
@@ -450,7 +500,19 @@ int TestLoadSo::loopPrint() {
 //     }
 //   }
 // }
+struct test_lambda_str{
+  int a;
+  double b;
+  std::string c;
+};
+void test_lambda(test_lambda_str test_la){
+  while(1){
+    sleep(1);
+    // HJ_INFO("%s",test_la.c_str());
+    HJ_INFO("test_lambda:%d, %f",test_la.a, test_la.b);
+  }
 
+}
 
 TestLoadSo::TestLoadSo(const rapidjson::Value& json_conf) : hj_bf::Function(json_conf) {
   //read config
@@ -503,7 +565,7 @@ TestLoadSo::TestLoadSo(const rapidjson::Value& json_conf) : hj_bf::Function(json
 //  std::cerr << "minos TestLoadSo:" << temp_timer2.use_count() << std::endl;
     int num = 0;
   //  hj_bf::createVariable("minos_test1", num);
-   timer1 = hj_bf::HJCreateTimer("timer1",  2* 1000 * 1000, &TestLoadSo::callback1, this);
+  //  timer1 = hj_bf::HJCreateTimer("timer1",  2* 1000 * 1000, &TestLoadSo::callback1, this);
   //  steadytimer1 = hj_bf::HJCreateSteadyTimer("steadytimer1",  1000 * 1000, &TestLoadSo::callback1_for_steady, this);
 
    client1 = hj_bf::HJCreateClient<collect_node::TwoInts>("client1_test");
@@ -516,16 +578,25 @@ TestLoadSo::TestLoadSo(const rapidjson::Value& json_conf) : hj_bf::Function(json
   // timer2 = hj_bf::HJCreateTimer("timer2", 2 * 1000 * 1000, &TestLoadSo::callback2, this);
   // timer3 = hj_bf::HJCreateTimer("timer3", 2 * 1000* 1000, callback3);
 //  timer3.stop();
-    auto state = std::thread(&TestLoadSo::loopPrint,this);  // 开线程
-      state.detach();
-//  auto state1 = std::thread(&TestLoadSo::loopPrint,this);  // 开线程
-//   state1.detach();
+  // auto state = std::thread(&TestLoadSo::loopPrint2,this);  // 开线程
+  // state.detach();
+  // auto state1 = std::thread(&TestLoadSo::loopPrint1,this);  // 开线程
+  // state1.detach();
 //  auto state2 = std::thread(&TestLoadSo::loopPrint,this);  // 开线程
 //   state2.detach();
 //  auto state3 = std::thread(&TestLoadSo::loopPrint,this);  // 开线程
 //   state3.detach();
 //  auto state4 = std::thread(&TestLoadSo::loopPrint,this);  // 开线程
 //   state4.detach();
+    
+    // std::string test_str = "minos test lambda";
+    // std::thread([&test_str](){test_lambda(test_str);}).detach();
+    test_lambda_str test_str{1, 2.1, "minos test lambda"};
+    std::thread(std::bind([](test_lambda_str &test_str){test_lambda(test_str);}, test_str)).detach();
+
+    test_lambda_str test_str{1, 2.1, "minos test lambda"};
+    std::thread(std::bind([](test_lambda_str &test_str){test_lambda(test_str);}, test_str)).detach();
+    
     std::string line = R"({"node": "planning_node","timestamp":1734057341.299,"restart_count":1})";
      rapidjson::Document document;
     if (!document.Parse(line.data()).HasParseError()) {

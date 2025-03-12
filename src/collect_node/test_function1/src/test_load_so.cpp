@@ -74,7 +74,7 @@ int TestAPI::loopFunc() {
 /**/
 //    write(fds_[1], "n", 1);
     /**/
-    usleep(1000000);
+    usleep(100000);
  //   crash() ;
     HJ_INFO("minos in loopFunc");
     HJ_ERROR("minos in loopFunc");
@@ -174,18 +174,18 @@ TestAPI::TestAPI(const rapidjson::Value& json_conf) : hj_bf::Function(json_conf)
     std::cerr << "minos get transmit:" << val_str << std::endl;
   }
 
-  blackboard = BT::Blackboard::create<ancp::StaticBlackboardRobinMap>();
+  // blackboard = BT::Blackboard::create<ancp::StaticBlackboardRobinMap>();
 //  HJ_INFO("minos test %d",10);
 //  HJ_INFO("minos test" << 10);
 //  HJ_ERROR("minos233 test %s",ROSCONSOLE_DEFAULT_NAME);
 //  HJ_INFO("minos233 test" << ROSCONSOLE_DEFAULT_NAME);
 
 //  auto test_pub_test = hj_bf::HJAdvertise<std_msgs::String>("collect_testfffffffff", 1000);
-  test_pub = hj_bf::HJAdvertise<std_msgs::String>("collect_test2", 1000);
-  test_pub2 = hj_bf::HJAdvertise<std_msgs::String>("collect_test3", 1000);
+  test_pub = hj_bf::HJAdvertise<std_msgs::String>("collect_test2", 1000,true);
+  test_pub2 = hj_bf::HJAdvertise<std_msgs::String>("collect_test3", 1000, true);
   client = hj_bf::HJCreateClient<collect_node::TwoInts>("add_two_ints");
-  //  auto state = std::thread(&TestAPI::loopFunc, this);  // 开线程
-  //  state.detach();
+  // auto state = std::thread(&TestAPI::loopFunc, this);  // 开线程
+  // state.detach();
   // timer1 = hj_bf::HJCreateTimer("timerloop", 1*1000 * 1000, &TestAPI::callback1, this);
   // test fd
 //  crash();

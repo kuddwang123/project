@@ -39,6 +39,8 @@ namespace collect_node_mcu {
 const std::array<std::string, 4> kNodes = {"slam_node", "planning_node",
                                            "middleware_node", "utils_node"};
 
+std::string Mcu::kConfigFilePrefix_ = "/userdata/hj/config/mcu/";
+
 Queue::Queue(unsigned int size)
     : size_(size), head_(0), tail_(0), buffer_(nullptr) {
   if (size_ > 0) {
@@ -757,7 +759,8 @@ bool UartDataHandler::analyzePackage(McuImpl* mcuImpl) {
             case FACTORYAIRBAGCTRLACK:
             case IMU_RESET_ACK:
             case BLOCK_KEY_ACK:
-            case CHARGE_CTL_ACK: {
+            case CHARGE_CTL_ACK: 
+            case ANGO_CTL_ACK: {
                 mcuImpl->sensorCtlAck(id, m_pRxBuf + 4);
                 break;
             }
@@ -1055,7 +1058,10 @@ bool McuImpl::run(int baud, int flowctl, int databit, int stopbit, int parity, b
 
     sub_factory_airbag_ = hj_bf::HJSubscribe("/factory/airbagSet", 10,
                                 &McuImpl::factoryAirbagCb, this);
+    
     sub_collect_action_ = hj_bf::HJSubscribe("collect_node/notify/func", 10, &McuImpl::factoryRestroedCb, this);
+
+    sub_w2bind_ = hj_bf::HJSubscribe("/w2/bind", 1, &McuImpl::w2BindStateCb, this); 
   });
   async_sub.detach();
 
@@ -1075,7 +1081,9 @@ bool McuImpl::run(int baud, int flowctl, int databit, int stopbit, int parity, b
       hj_bf::HJCreateTimer("getBootType", 500 * 1000, &McuImpl::getBootTypeCb, this);
   getBootTimeTmr_ = 
       hj_bf::HJCreateTimer("getBootTime", 500 * 1000, &McuImpl::getBootTimeCb, this);
-
+  loadMcuConfigTmr_ = 
+      hj_bf::HJCreateTimer("loadMcuConfig", 500 * 1000, &McuImpl::loadMcuConfigDelay, this);
+  
   isRun_ = true;
   dealUartThred_ = std::thread(&McuImpl::dealUartLoop, this);
 
@@ -1102,8 +1110,9 @@ void McuImpl::initSensorCtl() {
     lowPowerCtl_.init(0x52, 5, uartDataHandler_, "lowpower_ctl");
     factoryModuleCtrl_.init(0x100, 1, uartDataHandler_, "factoryModuleCtrl");
     factoryAirbagCtrl_.init(0x102, 3, uartDataHandler_, "factoryAirbagCtrl", true, false);
-    keyBlockCtl_.init(0x99, 1, uartDataHandler_, "blockkey_ctl");
+    keyBlockCtl_.init(0x99, 3, uartDataHandler_, "blockkey_ctl");
     chargeCtl_.init(0x5A, 1, uartDataHandler_, "charge_ctl");
+    angoCtl_.init(0x8E, 1, uartDataHandler_, "angoCtl", true, false);
 }
 
 void McuImpl::sensorCtlAck(uint32_t ackid, uint8_t* data) {
@@ -1171,6 +1180,9 @@ void McuImpl::sensorCtlAck(uint32_t ackid, uint8_t* data) {
         case CHARGE_CTL_ACK:
             chargeCtl_.ack(data);
             break;
+        case ANGO_CTL_ACK:
+            angoCtl_.ack(data);
+            break;
         default:
             HJ_ERROR("unknown mcu ack:%02x\n", ackid);
     }
@@ -1202,6 +1214,40 @@ void McuImpl::dealUartLoop() {
   while (isRun_) {
     uartDataHandler_->analyzePackage(this);
   }
+}
+
+void McuImpl::loadMcuConfigDelay(const hj_bf::HJTimerEvent&) {
+  boost::filesystem::path dic(Mcu::kConfigFilePrefix_);
+  std::unique_lock<std::mutex> lc(cfgWrMtx_);
+  for (const auto& file: boost::filesystem::directory_iterator(dic)) {
+    if (boost::filesystem::is_regular_file(file.status())) {
+        std::ifstream cfgfile(file.path().string());
+        if (!cfgfile.is_open()) {
+            HJ_ERROR("Could not open file: %s\n", file.path().c_str());
+            continue;
+        }
+        std::string jsonContent((std::istreambuf_iterator<char>(cfgfile)), std::istreambuf_iterator<char>());
+        cfgfile.close();
+
+        rapidjson::Document document;
+        rapidjson::ParseResult parseResult = document.Parse(jsonContent.c_str());
+
+        if (!parseResult || !document.IsObject()) {
+            HJ_ERROR("Json parse fail: %s\n", file.path().c_str());
+            continue;
+        }
+
+        auto item = file.path().stem().string();
+        if (item == "ango") {
+            if (document.HasMember("bind") && document["bind"].IsInt()) {
+                uint8_t bind = static_cast<uint8_t>(document["bind"].GetInt());
+                HJ_INFO("set ango from cfg: %d\n", bind);
+                angoCtl(bind);
+            }
+        }
+    }
+  }
+  loadMcuConfigTmr_.stop();
 }
 
 void McuImpl::motorPub(const hj_interface::Encoder &msg) {
@@ -2248,13 +2294,15 @@ void McuImpl::dealLowPowerFromMid(const rapidjson::Value& json) {
 }
 
 void McuImpl::dealBlockKeyFronMid(const rapidjson::Value& json) {
-    if (!json.HasMember("enable")) {
+    if (!json.HasMember("type") || !json.HasMember("time")) {
         return;
     }
 
-    uint8_t enable = json["enable"].GetUint();
+    uint8_t type = json["type"].GetUint();
+    uint16_t time = json["time"].GetUint();
     static std::vector<uint8_t> data(keyBlockCtl_.dataLen(), 0xff);
-    data[0] = enable;
+    data[0] = type;
+    ::memcpy(data.data()+1, &time, sizeof(uint16_t));
     keyBlockCtl_.pushData(data);
 }
 
@@ -2367,6 +2415,31 @@ void McuImpl::factoryRestroedCb(const hj_interface::CollectBroadcast &msg) {
   }
 }
 
+void McuImpl::w2BindStateCb(const std_msgs::Int32::ConstPtr& msg) {
+    HJ_INFO("w2 bind: %d\n", msg->data);
+    uint8_t pub_data = msg->data;
+    if (msg->data == 3) {
+      pub_data = 1;
+    }
+    static std::vector<uint8_t> w2bind(angoCtl_.dataLen(), 0xff);
+    uint8_t state = static_cast<uint8_t>(pub_data);
+    angoCtl(state);
+    rapidjson::Document doc;
+    doc.SetObject();
+    doc.AddMember("bind", pub_data, doc.GetAllocator());
+    if (msg->data == 3) {
+      HJ_INFO("minos is factory mode ,so return");
+      return;
+    }
+    saveMcuConfig(doc, Mcu::kConfigFilePrefix_+"ango.cfg");
+}
+
+void McuImpl::angoCtl(uint8_t state) {
+    static std::vector<uint8_t> w2bind(angoCtl_.dataLen(), 0xff);
+    w2bind[0] = state;
+    angoCtl_.pushData(w2bind);
+}
+
 void McuImpl::beatMcu() {
   static uint8_t heart_buf[] = {0x01, 0x0,  0x0,  0x0,  0xff, 0xe8, 0x03,
                                 0x00, 0x00, 0x05, 0x00, 0xff, 0xff, 0xff};
@@ -2467,6 +2540,24 @@ void McuImpl::ModuleRebootTimer(const hj_bf::HJTimerEvent&) {
   }
 }
 
+bool McuImpl::saveMcuConfig(rapidjson::Document& doc, const std::string& filepath) {
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    doc.Accept(writer);
+
+    std::unique_lock<std::mutex> lc(cfgWrMtx_);
+    std::ofstream ofs(filepath);
+    if (ofs.is_open()) {
+        ofs << buffer.GetString();
+        ofs.close();
+        HJ_INFO("save file [%s] success\n", filepath.c_str());
+        return true;
+    } else {
+        HJ_ERROR("save file [%s] fail\n", filepath.c_str());
+        return false;
+    }
+}
+
 Mcu::~Mcu() {
   delete mcuImpl_;
 }
@@ -2474,6 +2565,13 @@ Mcu::~Mcu() {
 Mcu::Mcu(const rapidjson::Value &json_conf)
     : hj_bf::Function(json_conf), mcuImpl_(nullptr) {
   bool keylog = false;
+  
+  if (!boost::filesystem::is_directory(kConfigFilePrefix_)) {
+    if (!boost::filesystem::create_directories(kConfigFilePrefix_)) {
+        HJ_ERROR("create dir %s fail\n", kConfigFilePrefix_.c_str());
+    }
+  }
+  
   if (json_conf.HasMember("enable_keylog") && json_conf["enable_keylog"].IsInt()) {
     int enable = 0;
     enable = json_conf["enable_keylog"].GetInt();

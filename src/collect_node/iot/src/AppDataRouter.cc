@@ -565,6 +565,7 @@ void AppDataRouter::apMsgIncomeEvent(const std::string& key, const std::string& 
     appDataPub(appmsg);
 }
 
+
 void AppDataRouter::sendAppResp(const hj_interface::AppMsg& msg)
 {
     deviceRespCallBack(boost::make_shared<hj_interface::AppMsg>(msg));
@@ -574,6 +575,8 @@ void AppDataRouter::sendAppRpt(const hj_interface::AppMsg& msg)
 {
     deviceReportCallBack(boost::make_shared<hj_interface::AppMsg>(msg));
 }
+
+
 
 bool AppDataRouter::getShadow(hj_interface::IotShadowRequest& req,
                    hj_interface::IotShadowResponse& res)

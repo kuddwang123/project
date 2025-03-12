@@ -37,6 +37,17 @@ HealthForward::~HealthForward() {
   HJ_INFO("~HealthForward");
 }
 
+void HealthForward::TaskNameCallBack(const std_msgs::String::ConstPtr& msg) {
+  std::lock_guard<std::mutex> lock(mtx_);
+  if (msg->data == "finish") {
+    task_name_ = "";
+  } else {
+    task_name_ = msg->data;
+  }
+  
+  HJ_INFO("task name: %s", task_name_.data());
+}
+
 bool HealthForward::pubBigDataCallback(hj_interface::HealthCheckCodeRequest& req,
                                hj_interface::HealthCheckCodeResponse& res) {
   if (req.code_val == status_code::COLLECT_NODE_MAX ||
@@ -45,12 +56,17 @@ bool HealthForward::pubBigDataCallback(hj_interface::HealthCheckCodeRequest& req
       req.code_val == status_code::MCU_SELF_CHECK_DONE) {
     return true;
   }
+  std::string task_name = "";
+  {
+    std::lock_guard<std::mutex> lock(mtx_);
+    task_name = task_name_;  // associatedTaskId
+  }
   uint32_t error_code = req.code_val;
   uint8_t status = req.status;
   double timestamp = ros::Time::now().toSec();
   int64_t timestamp_ms = static_cast<int64_t>(timestamp * 1000);
   std::string fw_version = GetVersion();
-  std::string str = R"({"event": "errorEvent", "errorCode":)" +
+  std::string str = R"({"event": "errorEvent", "associatedTaskId": ")" + task_name + R"(", "errorCode":)" +
       std::to_string(error_code)+ R"(, "status": )" + std::to_string(status) +
       R"(, "time": )" +  std::to_string(timestamp_ms) +  R"(, "fwVersion": ")" + fw_version + R"("})";
   hj_interface::BigdataUpload msg;
@@ -64,7 +80,15 @@ bool HealthForward::pubBigDataCallback(hj_interface::HealthCheckCodeRequest& req
 
 HealthForward::HealthForward(const rapidjson::Value &json_conf) : hj_bf::Function(json_conf) {
   // your code
-  big_data_pub_ = hj_bf::HJAdvertise<hj_interface::BigdataUpload>("/big_data_cmd", 10);
+  uint8_t retry_times = 0;
+  nh_ =  hj_bf::getHandle();
+  big_data_pub_ = nh_.advertise<hj_interface::BigdataUpload>("/big_data_cmd", 10, true);
+  while(ros::ok() && big_data_pub_.getNumSubscribers() == 0 && retry_times < 5) {
+    HJ_INFO("11 pubBigDataCallback, num=%d", big_data_pub_.getNumSubscribers());
+    usleep(100000);
+    retry_times++;
+  }
+  task_name_sub_ = hj_bf::HJSubscribe("/middleware_task_name", 1, &HealthForward::TaskNameCallBack, this);
   auto func = std::bind(&HealthForward::pubBigDataCallback, this, std::placeholders::_1, std::placeholders::_2);
   hj_bf::registerServerCallback(func);  // 收集报警码的订阅函数
 

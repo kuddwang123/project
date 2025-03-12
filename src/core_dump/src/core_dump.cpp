@@ -220,7 +220,7 @@ int OperateDir::_CopyList(const std::string &srcDirPath, const std::string &desD
   return 0;
 }
 bool dumpCallback(const google_breakpad::MinidumpDescriptor &descriptor, void *context, bool succeeded) {
-  // std::cerr << RECORD_TIMESTAMP << boost::stacktrace::stacktrace() << std::endl;
+  std::cerr << RECORD_TIMESTAMP << boost::stacktrace::stacktrace() << std::endl;
   std::cerr << "Dump path: " << descriptor.path() << std::endl;
   // exit(0);
 }
@@ -249,50 +249,79 @@ void handler(int signo) {
     //    guard_communication::sendCrashMessageToGuard();
     std::cerr << RECORD_TIMESTAMP << boost::stacktrace::stacktrace() << std::endl;
   }
-  if (signo == SIGSEGV && sigaction(signo, &segv_act, nullptr) == -1) {
+  if (signo == SIGSEGV && sigaction(signo, &segv_act, nullptr) != 0) {
     std::cerr << "sigaction SIGSEGV error:" << std::endl;
   }
-  if (signo == SIGABRT && sigaction(signo, &abrt_act, nullptr) == -1) {
+  if (signo == SIGABRT && sigaction(signo, &abrt_act, nullptr) != 0) {
     std::cerr << "sigaction SIGABRT error" << std::endl;
+  } else {
+    std::cerr << "minos sigaction SIGABRT out" << std::endl;
   }
-  if (signo == SIGBUS && sigaction(signo, &bus_act, nullptr) == -1) {
+  if (signo == SIGBUS && sigaction(signo, &bus_act, nullptr) != 0) {
     std::cerr << "sigaction SIGBUS error" << std::endl;
   }
-  if (signo == SIGILL && sigaction(signo, &ill_act, nullptr) == -1) {
+  if (signo == SIGILL && sigaction(signo, &ill_act, nullptr) != 0) {
     std::cerr << "sigaction SIGILL error:" << std::endl;
   }
-  if (signo == SIGFPE && sigaction(signo, &fpe_act, nullptr) == -1) {
+  if (signo == SIGFPE && sigaction(signo, &fpe_act, nullptr) != 0) {
     std::cerr << "sigaction SIGFPE error" << std::endl;
   }
-  if (signo == SIGPIPE && sigaction(signo, &pipe_act, nullptr) == -1) {
+  if (signo == SIGPIPE && sigaction(signo, &pipe_act, nullptr) != 0) {
     std::cerr << "sigaction SIGPIPE error" << std::endl;
   }
+  std::cerr << "minos sigaction  out" << std::endl;
 }
 
 void registerSignal() {
   std::cerr << "in registerMSignal" << std::endl;
-  act.sa_flags = SA_NODEFER | SA_RESETHAND;
+  act.sa_flags = SA_NODEFER ;
   act.sa_handler = &handler;
-  sigfillset(&act.sa_mask);
 
-  if (sigaction(SIGSEGV, &act, &segv_act) == -1) {
+  sigemptyset(&act.sa_mask);
+
+  sigemptyset(&abrt_act.sa_mask);
+  abrt_act.sa_flags = 0;
+  sigemptyset(&segv_act.sa_mask);
+  segv_act.sa_flags = 0;
+    sigemptyset(&bus_act.sa_mask);
+  bus_act.sa_flags = 0;
+    sigemptyset(&ill_act.sa_mask);
+  ill_act.sa_flags = 0;
+    sigemptyset(&fpe_act.sa_mask);
+  fpe_act.sa_flags = 0;
+    sigemptyset(&pipe_act.sa_mask);
+  pipe_act.sa_flags = 0;
+   std::cerr <<(long)abrt_act.sa_handler<<std::endl;
+  if (sigaction(SIGABRT, &act, &abrt_act) != 0) {
     std::exit(EXIT_FAILURE);
   }
-  if (sigaction(SIGABRT, &act, &abrt_act) == -1) {
+
+  std::cerr << "in registerMSignal size:" <<sizeof(act.sa_mask)/sizeof(unsigned long int)<<std::endl;
+  for(int i =0; i < sizeof(act.sa_mask)/sizeof(unsigned long int); i++){
+    std::cerr << act.sa_mask.__val[i]<<std::endl;
+  }
+  std::cerr <<(long)abrt_act.sa_handler<<std::endl;
+  if (sigaction(SIGSEGV, &act, &segv_act) != 0) {
     std::exit(EXIT_FAILURE);
   }
-  if (sigaction(SIGBUS, &act, &bus_act) == -1) {
+    std::cerr << "in registerMSignal size:" <<sizeof(act.sa_mask)/sizeof(unsigned long int)<<std::endl;
+  for(int i =0; i < sizeof(segv_act.sa_mask)/sizeof(unsigned long int);i++){
+    std::cerr << segv_act.sa_mask.__val[i]<<std::endl;
+  }
+  std::cerr << (long)segv_act.sa_sigaction<<std::endl;
+  if (sigaction(SIGBUS, &act, &bus_act) != 0) {
     std::exit(EXIT_FAILURE);
   }
-  if (sigaction(SIGILL, &act, &ill_act) == -1) {
+  if (sigaction(SIGILL, &act, &ill_act) != 0) {
     std::exit(EXIT_FAILURE);
   }
-  if (sigaction(SIGFPE, &act, &fpe_act) == -1) {
+  if (sigaction(SIGFPE, &act, &fpe_act) != 0) {
     std::exit(EXIT_FAILURE);
   }
-  if (sigaction(SIGPIPE, &act, &pipe_act) == -1) {
+  if (sigaction(SIGPIPE, &act, &pipe_act) != 0) {
     std::exit(EXIT_FAILURE);
   }
+  std::cerr << "in registerMSignal out" << std::endl;
 }
 
 

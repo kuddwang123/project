@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(test_function)
 set (CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_FLAGS " -g -O0 ")
+set(CMAKE_CXX_FLAGS "  -g ")
 set( HJ_WORKSPACE_PATH "../..")
 set(PLATFORM "amd64" CACHE STRING "amd64, i386, arm64_rk, etc.")
 set(INSTALL_DEVEL_PATH collect_node)

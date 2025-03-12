@@ -66,81 +66,91 @@ bool RecordMsg::OpenLogFile(const std::string& log_prefix) {
   std::string motor_time = log_prefix + "/motor_time.log";
   std::string imu_time = log_prefix + "/imu_time.log";
 
-  fd_motor_ = ::open(motor.data(), O_RDWR | O_CREAT | O_TRUNC, 0666);
-  if (fd_motor_ == -1) {
+  stream_motor_ = std::ofstream(motor.data(), std::ios::out | std::ios::trunc);
+  if (!stream_motor_.is_open()) {
     HJ_ERROR("open Encoder.log fail\n");
     return false;
   }
 
-  fd_imu_ = ::open(imu.data(), O_RDWR | O_CREAT | O_TRUNC, 0666);
-  if (fd_imu_ == -1) {
+  stream_imu_ = std::ofstream(imu.data(), std::ios::out | std::ios::trunc);
+  if (!stream_imu_.is_open()) {
     HJ_ERROR("open imu.log fail\n");
     return false;
   }
 
-  fd_triple_ultra_ = ::open(triple_ultra.data(), O_RDWR | O_CREAT | O_TRUNC, 0666);
-  if (fd_triple_ultra_ == -1) {
+  stream_triple_ultra_ = std::ofstream(triple_ultra.data(), std::ios::out | std::ios::trunc);
+  if (!stream_triple_ultra_.is_open()) {
     HJ_ERROR("open triple_ultra.log fail\n");
     return false;
   }
 
-  fd_left_back_ = ::open(left_back.data(), O_RDWR | O_CREAT | O_TRUNC, 0666);
-  if (fd_left_back_ == -1) {
+  stream_left_back_ = std::ofstream(left_back.data(), std::ios::out | std::ios::trunc);
+  if (!stream_left_back_.is_open()) {
     HJ_ERROR("open left_back.log fail\n");
-    return false;
+    return false; 
   }
 
-  fd_left_front_ = ::open(left_front.data(), O_RDWR | O_CREAT | O_TRUNC, 0666);
-  if (fd_left_front_ == -1) {
+  stream_left_front_ = std::ofstream(left_front.data(), std::ios::out | std::ios::trunc);
+  if (!stream_left_front_.is_open()) {
     HJ_ERROR("open left_front.log fail\n");
     return false;
   }
 
 #ifdef HJ_T1pro
-  fd_tof_ = ::open(left_tof.data(), O_RDWR | O_CREAT | O_TRUNC, 0666);
-  if (fd_tof_ == -1) {
+  stream_tof_ = std::ofstream(left_tof.data(), std::ios::out | std::ios::trunc);
+  if (!stream_tof_.is_open()) {
     HJ_ERROR("open left_tof.log fail\n");
     return false;
   }
-  fd_down_ray_ = ::open(down_ray.data(), O_RDWR | O_CREAT | O_TRUNC, 0666);
-  if (fd_down_ray_ == -1) {
+
+  stream_down_ray_ = std::ofstream(down_ray.data(), std::ios::out | std::ios::trunc);
+  if (!stream_down_ray_.is_open()) {
     HJ_ERROR("open down_ray.log fail\n");
     return false;
   }
 #else
-  fd_down_left_ = ::open(down_left.data(), O_RDWR | O_CREAT | O_TRUNC, 0666);
-  if (fd_down_left_ == -1) {
+  stream_down_left_ = std::ofstream(down_left.data(), std::ios::out | std::ios::trunc);
+  if (!stream_down_left_.is_open()) {
     HJ_ERROR("open down_left.log fail\n");
     return false;
   }
 
-  fd_down_right_ = ::open(down_right.data(), O_RDWR | O_CREAT | O_TRUNC, 0666);
-  if (fd_down_right_ == -1) {
+  stream_down_right_ = std::ofstream(down_right.data(), std::ios::out | std::ios::trunc);
+  if (!stream_down_right_.is_open()) {
     HJ_ERROR("open down_right.log fail\n");
     return false;
   }
 #endif
 
-  fd_mag_ = ::open(mag.data(), O_RDWR | O_CREAT | O_TRUNC, 0666);
-  if (fd_mag_ == -1) {
+  stream_mag_ = std::ofstream(mag.data(), std::ios::out | std::ios::trunc);
+  if (!stream_mag_.is_open()) {
     HJ_ERROR("open mag.log fail\n");
     return false;
   }
 
-  fd_nav_ = ::open(nav.data(), O_RDWR | O_CREAT | O_TRUNC, 0666);
-  if (fd_nav_ == -1) {
+  stream_nav_ = std::ofstream(nav.data(), std::ios::out | std::ios::trunc);
+  if (!stream_nav_.is_open()) {
     HJ_ERROR("open nav.log fail\n");
     return false;
   }
 
-  fd_pressure_ = ::open(pressure.data(), O_RDWR | O_CREAT | O_TRUNC, 0666);
-  if (fd_pressure_ == -1) {
+  stream_pressure_ = std::ofstream(pressure.data(), std::ios::out | std::ios::trunc);
+  if (!stream_pressure_.is_open()) {
     HJ_ERROR("open pressure.log fail\n");
     return false;
   }
 
-  fd_motor_time_ = ::open(motor_time.data(), O_RDWR | O_CREAT | O_TRUNC, 0666);
-  fd_imu_time_ = ::open(imu_time.data(), O_RDWR | O_CREAT | O_TRUNC, 0666);
+  stream_motor_time_ = std::ofstream(motor_time.data(), std::ios::out | std::ios::trunc);
+  if (!stream_motor_time_.is_open()) {
+    HJ_ERROR("open motor_time.log fail\n");
+    return false;
+  }
+
+  stream_imu_time_ = std::ofstream(imu_time.data(), std::ios::out | std::ios::trunc);
+  if (!stream_imu_time_.is_open()) {
+    HJ_ERROR("open imu_time.log fail\n");
+    return false;
+  }
 
   return true;
 }
@@ -198,9 +208,8 @@ void RecordMsg::WriteMotor(const hj_interface::Atime::ConstPtr &msg) {
   char str[256] = {0};
   snprintf(str, sizeof(str), "%lf %lf %lu\n",
           msg->timestamp_current.toSec(), msg->timestamp_origin.toSec(), msg->index);
-  if (write(fd_motor_time_, str, strlen(str)) < 0) {
-    HJ_ERROR("WriteMotor Failed to write to file.");
-  }
+  stream_motor_time_ << str;
+  stream_motor_time_.flush();
 }
 
 void RecordMsg::WriteImu(const hj_interface::Atime::ConstPtr &msg) {
@@ -210,9 +219,8 @@ void RecordMsg::WriteImu(const hj_interface::Atime::ConstPtr &msg) {
   char str[256] = {0};
   snprintf(str, sizeof(str), "%lf %lf %lu %u\n",
           msg->timestamp_current.toSec(), msg->timestamp_origin.toSec(), msg->index, msg->flag);
-  if (write(fd_imu_time_, str, strlen(str)) < 0) {
-    HJ_ERROR("WriteImu Failed to write to file.");
-  }
+  stream_imu_time_ << str;
+  stream_imu_time_.flush();
 }
 
 void RecordMsg::MotorChatterCallback(const hj_interface::Encoder::ConstPtr &msg) {
@@ -222,9 +230,8 @@ void RecordMsg::MotorChatterCallback(const hj_interface::Encoder::ConstPtr &msg)
   char str[256] = {0};
   snprintf(str, sizeof(str), "%lf %lu %f %f\n",
           msg->custom_time.toSec(), msg->index, msg->left_msg, msg->right_msg);
-  if (write(fd_motor_, str, strlen(str)) < 0) {
-    HJ_ERROR("MotorChatterCallback Failed to write to file.");
-  }
+  stream_motor_ << str;
+  stream_motor_.flush();
 }
 
 void RecordMsg::TripleUltraCallback(const hj_interface::TripleUltra::ConstPtr& msg) {
@@ -235,9 +242,8 @@ void RecordMsg::TripleUltraCallback(const hj_interface::TripleUltra::ConstPtr& m
   snprintf(str, sizeof(str), "%lf %u %u %u %u\n",
           msg->timestamp.toSec(), msg->front_l,
           msg->front_m, msg->front_r, msg->status);
-  if (write(fd_triple_ultra_, str, strlen(str)) < 0) {
-    HJ_ERROR("TripleUltraCallback Failed to write to file.");
-  }
+  stream_triple_ultra_ << str;
+  stream_triple_ultra_.flush();
 }
 
 void RecordMsg::ImuChatterCallback(const hj_interface::Imu::ConstPtr &msg) {
@@ -249,9 +255,8 @@ void RecordMsg::ImuChatterCallback(const hj_interface::Imu::ConstPtr &msg) {
           msg->custom_time.toSec(), msg->index,
           msg->roll, msg->pitch, msg->yaw, msg->gyro_x, msg->gyro_y,
           msg->gyro_z, msg->accel_x, msg->accel_y, msg->accel_z, msg->flag);
-  if (write(fd_imu_, str, strlen(str)) < 0) {
-    HJ_ERROR("ImuChatterCallback Failed to write to file.");
-  }
+  stream_imu_ << str;
+  stream_imu_.flush();
 }
 
 void RecordMsg::LeftBackCallback(const hj_interface::LeftBack::ConstPtr& msg) {
@@ -261,9 +266,8 @@ void RecordMsg::LeftBackCallback(const hj_interface::LeftBack::ConstPtr& msg) {
   char str[128] = {0};
   snprintf(str, sizeof(str), "%lf %u %u\n",
           msg->timestamp.toSec(), msg->dist, msg->status);
-  if (write(fd_left_back_, str, strlen(str)) < 0) {
-    HJ_ERROR("LeftBackCallback Failed to write to file.");
-  }
+  stream_left_back_ << str;
+  stream_left_back_.flush();
 }
 
 void RecordMsg::LeftFrontCallback(const hj_interface::LeftFront::ConstPtr& msg) {
@@ -273,9 +277,8 @@ void RecordMsg::LeftFrontCallback(const hj_interface::LeftFront::ConstPtr& msg) 
   char str[128] = {0};
   snprintf(str, sizeof(str), "%lf %u %u\n",
           msg->timestamp.toSec(), msg->dist, msg->status);
-  if (write(fd_left_front_, str, strlen(str)) < 0) {
-    HJ_ERROR("LeftFrontCallback Failed to write to file.");
-  }
+  stream_left_front_ << str;
+  stream_left_front_.flush();
 }
 
 #ifdef HJ_T1pro
@@ -287,9 +290,8 @@ void RecordMsg::TofChatterCallback(const hj_interface::LeftTof::ConstPtr& msg) {
   char str[128] = {0};
   snprintf(str, sizeof(str), "%lf %u %u\n",
           msg->timestamp.toSec(), msg->dist_front, msg->dist_back);
-  if (write(fd_tof_, str, strlen(str)) < 0) {
-    HJ_ERROR("TofChatterCallback Failed to write to file.");
-  }
+  stream_tof_ << str;
+  stream_tof_.flush();
 }
 
 void RecordMsg::FallCallback(const hj_interface::DownRay::ConstPtr& msg) {
@@ -299,9 +301,8 @@ void RecordMsg::FallCallback(const hj_interface::DownRay::ConstPtr& msg) {
   char str[128] = {0};
   snprintf(str, sizeof(str), "%lf %u %u\n",
           msg->timestamp.toSec(), msg->left_down, msg->right_down);
-  if (write(fd_down_ray_, str, strlen(str)) < 0) {
-    HJ_ERROR("FallCallback Failed to write to file.");
-  }
+  stream_down_ray_ << str;
+  stream_down_ray_.flush();
 }
 #else
 
@@ -312,9 +313,8 @@ void RecordMsg::DownRightCallback(const hj_interface::DownRight::ConstPtr& msg) 
   char str[128] = {0};
   snprintf(str, sizeof(str), "%lf %u %u\n",
           msg->timestamp.toSec(), msg->dist, msg->status);
-  if (write(fd_down_right_, str, strlen(str)) < 0) {
-    HJ_ERROR("DownRightCallback Failed to write to file.");
-  }
+  stream_down_right_ << str;
+  stream_down_right_.flush();
 }
 
 void RecordMsg::DownLeftCallback(const hj_interface::DownLeft::ConstPtr& msg) {
@@ -324,9 +324,8 @@ void RecordMsg::DownLeftCallback(const hj_interface::DownLeft::ConstPtr& msg) {
   char str[128] = {0};
   snprintf(str, sizeof(str), "%lf %u\n",
           msg->timestamp.toSec(), msg->ray_value);
-  if (write(fd_down_left_, str, strlen(str)) < 0) {
-    HJ_ERROR("DownLeftCallback Failed to write to file.");
-  }
+  stream_down_left_ << str;
+  stream_down_left_.flush();
 }
 #endif
 
@@ -337,9 +336,8 @@ void RecordMsg::MagChatterCallback(const hj_interface::Mag::ConstPtr &msg) {
   char str[128] = {0};
   snprintf(str, sizeof(str), "%lf %d %d %d\n",
           msg->custom_time.toSec(), msg->mag_x, msg->mag_y, msg->mag_z);
-  if (write(fd_mag_, str, strlen(str)) < 0) {
-    HJ_ERROR("MagChatterCallback Failed to write to file.");
-  }
+  stream_mag_ << str;
+  stream_mag_.flush();
 }
 
 void RecordMsg::MotorSetChatterCallback(const hj_interface::Nav::ConstPtr &msg) {
@@ -350,9 +348,8 @@ void RecordMsg::MotorSetChatterCallback(const hj_interface::Nav::ConstPtr &msg) 
   snprintf(str, sizeof(str), "%lf %f %f\n",
           msg->custom_time.toSec(), msg->left_msg,
           msg->right_msg);
-  if (write(fd_nav_, str, strlen(str)) < 0) {
-    HJ_ERROR("MotorSetChatterCallback Failed to write to file.");
-  }
+  stream_nav_ << str;
+  stream_nav_.flush();
 }
 
 void RecordMsg::PressureChatterCallback(const hj_interface::Depth::ConstPtr &msg) {
@@ -362,9 +359,8 @@ void RecordMsg::PressureChatterCallback(const hj_interface::Depth::ConstPtr &msg
   char str[256] = {0};
   snprintf(str, sizeof(str), "%lf %d %d\n",
           msg->timestamp.toSec(), msg->pressure, msg->temp);
-  if (write(fd_pressure_, str, strlen(str)) < 0) {
-    HJ_ERROR("PressureChatterCallback Failed to write to file.");
-  }
+  stream_pressure_ << str;
+  stream_pressure_.flush();
 }
 
 RecordMsg::~RecordMsg() {
@@ -379,21 +375,22 @@ RecordMsg::~RecordMsg() {
 
 void RecordMsg::CloseFiles() {
 #ifdef HJ_T1pro
-  ::close(fd_tof_);
-  ::close(fd_down_ray_);
+  stream_tof_.close();
+  stream_down_ray_.close();
 #else
-  ::close(fd_down_left_);
-  ::close(fd_down_right_);
+  stream_down_left_.close();
+  stream_down_right_.close();
 #endif
-  ::close(fd_left_back_);
-  ::close(fd_left_front_);
-  ::close(fd_motor_);
-  ::close(fd_imu_);
-  ::close(fd_mag_);
-  ::close(fd_nav_);
-  ::close(fd_pressure_);
-  ::close(fd_motor_time_);
-  ::close(fd_imu_time_);
+  stream_triple_ultra_.close();
+  stream_left_front_.close();
+  stream_left_back_.close();
+  stream_motor_.close();
+  stream_imu_.close();
+  stream_mag_.close();
+  stream_nav_.close();
+  stream_pressure_.close();
+  stream_motor_time_.close();
+  stream_imu_time_.close();
 }
 
 
@@ -488,6 +485,7 @@ void RecordMsg::FinishTask() {
 void RecordMsg::DealTaskCallback(const hj_interface::SensorDataRecord::ConstPtr& msg) {
   // 这里是处理任务的函数
   // 11: 水面任务  13: 池壁任务 14：水线任务 15：池底任务 35: 结束当前任务录制  其他：未知小任务
+  writing_enabled_.store(false);
   switch (msg->action_cmd) {
     case 11: {
       // 开始水面任务录制

@@ -9,6 +9,8 @@ namespace collect_handle_action {
 
 constexpr char kLogPath[] = "/userdata/hj/log/";
 constexpr char kMapFiles[] = "/userdata/hj/maps";
+constexpr char kLogCtrlConfig[] = "/userdata/hj/config/remote_config.json";
+constexpr char kLogCtrlBakConfig[] = "/userdata/hj/config/old_version_back.json";
 
 void HandleAction::SysActionCallback(const hj_interface::SysAction &msg) {
   HJ_INFO("collect_node receive action:%d", msg.action);
@@ -78,6 +80,14 @@ void HandleAction::ResetLogHandler(const hj_interface::CollectBroadcast &msg) {
     boost::filesystem::remove_all(path);
     path = boost::filesystem::path(kMapFiles);
     boost::filesystem::remove_all(path);
+    path = boost::filesystem::path(kLogCtrlConfig);
+    if (boost::filesystem::exists(path)) {
+      boost::filesystem::remove(path);
+    }
+    path = boost::filesystem::path(kLogCtrlBakConfig);
+    if (boost::filesystem::exists(path)) {
+      boost::filesystem::remove(path);
+    }
 
     hj_interface::CollectBroadcast response_msg;
     response_msg.action = msg.action;

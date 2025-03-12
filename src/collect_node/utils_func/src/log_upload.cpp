@@ -39,7 +39,10 @@ constexpr char kLogUploadConfigFile[] = "/tmp/devInfo.json";
 constexpr char kLogUploadSocOTAFiles[] = "ota.log";
 constexpr char kLogUploadMcuOTAFiles[] = "mcuota.log";
 constexpr char kLogUploadMapInfoPath[] = "/userdata/hj/maps";
-
+constexpr char kLogUploadBatteryInfoPrefix[] = "bat";
+constexpr char kLogUploadLogSensorOtherDir[] = "/userdata/hj/log/sensor_data_other";
+constexpr char kLogUploadHumidityInfoPrefix[] = "temp_humidity";
+constexpr char kLogUploadOutwaterInfoPrefix[] = "out_water";
 void PrintListName(const std::vector<std::string>& list) {
   HJ_INFO("minos pack file list:");
   for (auto path_name : list) {
@@ -214,6 +217,11 @@ bool LogUpload::PackAll(const std::string& timestamp_str, std::string& pack_name
   GetFiles(directory_path, all_file);
   directory_path = kLogUploadMapInfoPath;
   GetFiles(directory_path, all_file);
+  directory_path = kLogUploadLogSensorOtherDir;
+  GetFilesWithPrefix(directory_path, all_file, kLogUploadBatteryInfoPrefix);
+  GetFilesWithPrefix(directory_path, all_file, kLogUploadHumidityInfoPrefix);
+  GetFilesWithPrefix(directory_path, all_file, kLogUploadOutwaterInfoPrefix);
+
   PrintListName(all_file);
   return hj_bf::CreateZipFileByFiles(pack_name, all_file, password_);
 }
